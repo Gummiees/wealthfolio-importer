@@ -1,0 +1,18 @@
+services:
+  wealthfolio-importer:
+    image: ghcr.io/gummiees/wealthfolio-importer:latest
+    container_name: wealthfolio-importer
+    restart: unless-stopped
+
+    environment:
+      DRY_RUN: "true"
+      SEED_STATE_ONLY: "false"
+      POLL_INTERVAL_SECONDS: "30"
+
+    volumes:
+      - /volume1/finance/wealthfolio-importer/config/config.json:/app/config.json:ro
+      - /volume1/finance/wealthfolio-importer/data/inbox:/inbox
+      - /volume1/finance/wealthfolio-importer/data/outbox:/outbox
+      - /volume1/finance/wealthfolio-importer/data/processed:/processed
+      - /volume1/finance/wealthfolio-importer/data/failed:/failed
+      - /volume1/finance/wealthfolio-importer/data/state:/state

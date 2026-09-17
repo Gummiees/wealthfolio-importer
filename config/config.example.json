@@ -1,0 +1,32 @@
+{
+  "accounts": {
+    "revolut/stocks": {
+      "parser": "revolut-stocks",
+      "currency": "USD"
+    },
+    "revolut/savings-eur": {
+      "parser": "revolut-savings",
+      "currency": "EUR",
+      "symbol": "REV-CASH-EUR",
+      "isin": "IE000AZVL3K0",
+      "amountOverrides": {}
+    },
+    "revolut/savings-usd": {
+      "parser": "revolut-savings",
+      "currency": "USD",
+      "symbol": "REV-CASH-USD",
+      "isin": "IE000H9J0QX4",
+      "amountOverrides": {}
+    },
+    "xtb/main": {
+      "parser": "xtb",
+      "currency": "EUR",
+      "tickerAliases": {
+        "CSPX.UK": "CSPX.L"
+      },
+      "tickerCurrencies": {
+        "CSPX.UK": "USD"
+      }
+    }
+  }
+}
