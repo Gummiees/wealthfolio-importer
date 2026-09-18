@@ -7,6 +7,10 @@ services:
     environment:
       DRY_RUN: "true"
       SEED_STATE_ONLY: "false"
+      AUTO_IMPORT: "false"
+      WEALTHFOLIO_MCP_URL: "http://wealthfolio:8088/mcp"
+      WEALTHFOLIO_MCP_TOKEN_FILE: "/run/secrets/wealthfolio_mcp_token"
+      MCP_IMPORT_BATCH_SIZE: "500"
       POLL_INTERVAL_SECONDS: "30"
 
     volumes:
@@ -16,3 +20,11 @@ services:
       - /volume1/finance/wealthfolio-importer/data/processed:/processed
       - /volume1/finance/wealthfolio-importer/data/failed:/failed
       - /volume1/finance/wealthfolio-importer/data/state:/state
+      - /volume1/finance/wealthfolio-importer/secrets/wealthfolio_mcp_token:/run/secrets/wealthfolio_mcp_token:ro
+
+    networks:
+      - traefik_proxy
+
+networks:
+  traefik_proxy:
+    external: true

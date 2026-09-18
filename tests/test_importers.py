@@ -16,6 +16,8 @@ from wealthfolio_importer.parsers import (
     parse_revolut_stocks,
     parse_xtb,
 )
+from wealthfolio_importer.mcp import McpError, McpImportResult, activity_to_mcp
+from wealthfolio_importer.model import Activity
 from wealthfolio_importer.service import WatchService
 
 
@@ -138,6 +140,87 @@ class ImporterTests(unittest.TestCase):
             self.assertEqual(WatchService().run_once(), 0)
         outputs = list((self.root / "outbox").rglob("*.csv"))
         self.assertEqual(len(outputs), 1)
+
+    def test_mcp_mapping_preserves_supported_fields_and_rejects_subtype(self):
+        activity = Activity(
+            date="2025-01-01T10:00:00Z",
+            activity_type="BUY",
+            currency="USD",
+            amount=Decimal("100"),
+            source_ref="source-1",
+            symbol="AAPL",
+            quantity=Decimal("0.5"),
+            unit_price=Decimal("200"),
+            fee=Decimal("1.25"),
+            comment="broker reference",
+        )
+        row = activity_to_mcp(activity, "account-1", 7)
+        self.assertEqual(row["accountId"], "account-1")
+        self.assertEqual(row["lineNumber"], 7)
+        self.assertEqual(row["quantity"], 0.5)
+        self.assertEqual(row["fee"], 1.25)
+
+        unsafe = Activity(
+            date=activity.date,
+            activity_type="CREDIT",
+            currency="USD",
+            amount=Decimal("1"),
+            source_ref="source-2",
+            subtype="REIMBURSEMENT",
+        )
+        with self.assertRaises(McpError):
+            activity_to_mcp(unsafe, "account-1", 8)
+
+    def test_watch_service_auto_imports_through_mcp_after_preview(self):
+        inbox = self.root / "inbox"
+        account_dir = inbox / "revolut" / "stocks"
+        account_dir.mkdir(parents=True)
+        statement = (
+            "Date\tTicker\tType\tQuantity\tPrice per share\tTotal Amount\tCurrency\tFX Rate\n"
+            "2025-01-01T10:00:00Z\t\tCASH TOP-UP\t\t\tUSD 100\tUSD\t1.25\n"
+        )
+        source = account_dir / "latest.tsv"
+        source.write_text(statement, encoding="utf-8")
+        config = self.root / "config.json"
+        config.write_text(
+            json.dumps(
+                {
+                    "accounts": {
+                        "revolut/stocks": {
+                            "parser": "revolut-stocks",
+                            "currency": "USD",
+                            "wealthfolioAccountId": "account-1",
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        environment = {
+            "CONFIG_PATH": str(config),
+            "INBOX_DIR": str(inbox),
+            "OUTBOX_DIR": str(self.root / "outbox"),
+            "PROCESSED_DIR": str(self.root / "processed"),
+            "FAILED_DIR": str(self.root / "failed"),
+            "STATE_DIR": str(self.root / "state"),
+            "DRY_RUN": "false",
+            "AUTO_IMPORT": "true",
+        }
+        client = mock.Mock()
+        client.import_activities.return_value = McpImportResult(1, 0, 0, ["run-1"])
+        with mock.patch.dict(os.environ, environment, clear=False), mock.patch(
+            "wealthfolio_importer.service.WealthfolioMcpClient.from_environment",
+            return_value=client,
+        ):
+            self.assertEqual(WatchService().run_once(), 0)
+
+        client.import_activities.assert_called_once()
+        _, account_id = client.import_activities.call_args.args
+        self.assertEqual(account_id, "account-1")
+        self.assertTrue(client.import_activities.call_args.kwargs["commit"])
+        self.assertFalse(list((self.root / "outbox").rglob("*.csv")))
+        self.assertFalse(source.exists())
+        self.assertTrue(list((self.root / "processed").rglob("latest.tsv")))
 
 
 if __name__ == "__main__":

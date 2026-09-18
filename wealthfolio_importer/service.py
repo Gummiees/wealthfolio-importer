@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 
 from .converter import EXTENSIONS, convert
+from .mcp import WealthfolioMcpClient, mcp_field_warnings
 from .model import Activity, ConversionResult, write_csv
 
 
@@ -76,6 +77,16 @@ class WatchService:
         self.state_path = Path(os.environ.get("STATE_DIR", "/state")) / "emitted.json"
         self.dry_run = _boolean("DRY_RUN", True)
         self.seed_state_only = _boolean("SEED_STATE_ONLY", False)
+        self.auto_import = _boolean("AUTO_IMPORT", False)
+        self.mcp_url = os.environ.get(
+            "WEALTHFOLIO_MCP_URL", "http://wealthfolio:8088/mcp"
+        )
+        self.mcp_token_file = Path(
+            os.environ.get(
+                "WEALTHFOLIO_MCP_TOKEN_FILE", "/run/secrets/wealthfolio_mcp_token"
+            )
+        )
+        self.mcp_batch_size = int(os.environ.get("MCP_IMPORT_BATCH_SIZE", "500"))
         self.interval = int(os.environ.get("POLL_INTERVAL_SECONDS", "30"))
 
     def load_config(self) -> dict:
@@ -111,14 +122,60 @@ class WatchService:
         state = _load_json(self.state_path, {"accounts": {}})
         emitted = set(state.setdefault("accounts", {}).setdefault(key, []))
         fresh = [activity for activity in result.activities if activity.identifier not in emitted]
-        preview = ConversionResult(fresh, checks={**result.checks, "previouslyEmitted": len(result.activities) - len(fresh)})
+        preview = ConversionResult(
+            fresh,
+            checks={
+                **result.checks,
+                "previouslyEmitted": len(result.activities) - len(fresh),
+            },
+            warnings=list(result.warnings),
+        )
+        if self.auto_import:
+            preview.warnings.extend(mcp_field_warnings(fresh))
         print_preview(preview)
+
+        if self.seed_state_only and self.dry_run:
+            raise ValueError("SEED_STATE_ONLY=true requiere DRY_RUN=false")
+
+        if self.seed_state_only:
+            print(
+                "SEED_STATE_ONLY=true: se registra el histórico sin generar CSV "
+                "ni llamar a MCP."
+            )
+        elif self.auto_import and fresh:
+            account_id = account.get("wealthfolioAccountId", "")
+            if not account_id.strip():
+                raise ValueError(f"Falta wealthfolioAccountId para {key}")
+            client = WealthfolioMcpClient.from_environment(
+                self.mcp_url, self.mcp_token_file
+            )
+            imported = client.import_activities(
+                fresh,
+                account_id,
+                commit=not self.dry_run,
+                batch_size=self.mcp_batch_size,
+            )
+            if self.dry_run:
+                print(
+                    "Preview MCP correcto: "
+                    f"{len(fresh)} actividad(es), {imported.duplicates} duplicado(s)."
+                )
+            else:
+                print(
+                    "Importación MCP completada: "
+                    f"importadas={imported.imported}, omitidas={imported.skipped}, "
+                    f"duplicados={imported.duplicates}, runs={','.join(imported.import_run_ids)}"
+                )
+
         if self.dry_run:
             print("DRY_RUN=true: no se ha escrito ni movido ningún archivo.")
             return
 
         if self.seed_state_only:
-            print("SEED_STATE_ONLY=true: se registra el histórico sin generar CSV.")
+            pass
+        elif self.auto_import:
+            if not fresh:
+                print("No hay actividades nuevas; no se llama a MCP.")
         elif fresh:
             output_name = f"{path.stem}-wealthfolio.csv"
             output = _unique_path(self.outbox / relative_parent, output_name)
@@ -155,7 +212,8 @@ class WatchService:
         print(
             f"Wealthfolio Importer | inbox={self.inbox} | "
             f"dry_run={str(self.dry_run).lower()} | "
-            f"seed_state_only={str(self.seed_state_only).lower()}"
+            f"seed_state_only={str(self.seed_state_only).lower()} | "
+            f"auto_import={str(self.auto_import).lower()}"
         )
         while True:
             failures = self.run_once()

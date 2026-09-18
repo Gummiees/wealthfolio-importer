@@ -115,6 +115,39 @@ exportación acumulativa vuelva a generar todo el histórico. El estado signific
 "CSV emitido"; la importación manual en Wealthfolio sigue siendo
 responsabilidad del usuario.
 
+### Importación automática mediante MCP
+
+Wealthfolio 3.8 incorpora un servidor MCP oficial con importación de
+actividades, preview, validación y detección de duplicados. Para utilizarlo:
+
+1. Activar `WF_MCP_ENABLED=true` y `WF_MCP_AUDIT_ENABLED=true` en el servicio
+   Wealthfolio.
+2. Crear en **Settings → AI Agent Access** un token con `Accounts: read`,
+   `Activities: read`, `Activities: draft` y `Activities: write`.
+3. Guardar el token, sin espacios ni salto adicional, en
+   `/volume1/finance/wealthfolio-importer/secrets/wealthfolio_mcp_token`.
+4. Rellenar `wealthfolioAccountId` en cada entrada de `config.json` con el UUID
+   de la cuenta de destino.
+5. Conectar ambos servicios a `traefik_proxy` y activar:
+
+```yaml
+AUTO_IMPORT: "true"
+WEALTHFOLIO_MCP_URL: "http://wealthfolio:8088/mcp"
+WEALTHFOLIO_MCP_TOKEN_FILE: "/run/secrets/wealthfolio_mcp_token"
+```
+
+Con `AUTO_IMPORT=true` y `DRY_RUN=true`, el servicio llama únicamente a
+`prepare_activity_import`: Wealthfolio resuelve los activos, valida todas las
+filas y detecta duplicados sin escribir. Con `DRY_RUN=false`, vuelve a validar
+y llama a `commit_activity_import`; el estado local y el movimiento a
+`processed` solo se actualizan después de que Wealthfolio confirme el commit.
+
+El protocolo limita cada llamada a 1000 filas; el servicio usa lotes de 500 de
+forma predeterminada. Wealthfolio 3.8 no permite enviar por MCP `fxRate`, `isin`
+o `instrumentType`: Wealthfolio los resuelve con su histórico de divisas y el
+símbolo existente. Si una actividad contiene `tax` o `subtype`, la importación
+se detiene para evitar perder información estructurada.
+
 Si el histórico ya se importó manualmente, se puede inicializar el registro sin
 generar otro CSV: colocar una exportación histórica completa en cada cuenta,
 usar temporalmente `DRY_RUN=false` y `SEED_STATE_ONLY=true`, esperar a que los
