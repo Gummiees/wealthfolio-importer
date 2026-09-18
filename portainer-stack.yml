@@ -5,9 +5,9 @@ services:
     restart: unless-stopped
 
     environment:
-      DRY_RUN: "true"
+      DRY_RUN: "false"
       SEED_STATE_ONLY: "false"
-      AUTO_IMPORT: "false"
+      AUTO_IMPORT: "true"
       WEALTHFOLIO_MCP_URL: "http://wealthfolio:8088/mcp"
       WEALTHFOLIO_MCP_TOKEN_FILE: "/run/secrets/wealthfolio_mcp_token"
       MCP_IMPORT_BATCH_SIZE: "500"

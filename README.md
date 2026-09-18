@@ -158,8 +158,9 @@ archivos pasen a `processed/` y volver a poner `SEED_STATE_ONLY=false`.
 `portainer-stack.yml` usa la imagen
 `ghcr.io/gummiees/wealthfolio-importer:latest` y rutas bajo
 `/volume1/finance/wealthfolio-importer`. Crear esas carpetas en el NAS, copiar
-allí `config/config.json`, pegar el stack en Portainer y arrancar primero con
-`DRY_RUN=true`.
+allí `config/config.json`, pegar el stack en Portainer. El despliegue activo usa `AUTO_IMPORT=true` y
+`DRY_RUN=false`; para una instalación nueva conviene validar primero con
+`DRY_RUN=true` y cambiarlo a `false` después de comprobar el preview.
 
 La acción de GitHub incluida publica `latest`, la etiqueta de versión y una
 etiqueta por commit cuando se hace push a `main` o a una etiqueta `v*`.
