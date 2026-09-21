@@ -33,8 +33,18 @@ def _date(value: str, line_number: int, field: str) -> str:
     return f"{year}-{month}-{day}"
 
 
-def _comment(concept: str, value_date: str, nif: str, reference: str) -> str:
-    details = [f"Sabadell: {concept}", f"fecha valor {value_date}"]
+def _comment(
+    concept: str,
+    value_date: str,
+    balance: Decimal,
+    nif: str,
+    reference: str,
+) -> str:
+    details = [
+        f"Sabadell: {concept}",
+        f"fecha valor {value_date}",
+        f"saldo {balance}",
+    ]
     if nif:
         details.append(f"NIF {nif}")
     if reference:
@@ -159,7 +169,11 @@ def parse_sabadell(path: Path, config: dict) -> ConversionResult:
             amount=abs(row["amount"]),
             source_ref=f"sabadell:{raw_ref}:source",
             comment=_comment(
-                row["concept"], row["value_date"], row["nif"], row["reference"]
+                row["concept"],
+                row["value_date"],
+                row["balance"],
+                row["nif"],
+                row["reference"],
             ),
         )
         activities.append(activity)

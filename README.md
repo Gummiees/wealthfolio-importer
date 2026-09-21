@@ -214,6 +214,9 @@ una fecha `DDMMYYYY`, de la que se obtiene el año.
 - La deduplicación usa todos los campos originales de cada movimiento. Un
   extracto acumulativo o solapado puede depositarse directamente en `inbox`:
   solo se envían las filas nuevas.
+- El comentario enviado a Wealthfolio incluye el saldo posterior del extracto.
+  Esto distingue cargos legítimos con la misma fecha, importe y descripción,
+  que el detector MCP consideraría duplicados si las filas fueran idénticas.
 
 ## Reglas de Revolut Stocks
 

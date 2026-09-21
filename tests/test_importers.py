@@ -173,6 +173,23 @@ class ImporterTests(unittest.TestCase):
             [("WITHDRAWAL", Decimal("302.00")), ("CREDIT", Decimal("19.56"))],
         )
 
+    def test_sabadell_distinguishes_same_day_equal_charges_for_mcp(self):
+        path = self.write(
+            "same-day.txt",
+            "01/06/2026|ENVIO DE INSTANT MONEY|01/06/2026|-300,00|700,00||CARD\n"
+            "01/06/2026|ENVIO DE INSTANT MONEY|01/06/2026|-300,00|400,00||CARD\n",
+        )
+        result = parse_sabadell(
+            path,
+            {"currency": "EUR", "includeOpeningBalance": False},
+        )
+        self.assertEqual(len(result.activities), 2)
+        self.assertNotEqual(result.activities[0].comment, result.activities[1].comment)
+        self.assertEqual(
+            {activity.comment.rsplit("saldo ", 1)[-1] for activity in result.activities},
+            {"700.00 | ref CARD", "400.00 | ref CARD"},
+        )
+
     def test_watch_service_emits_only_new_activities(self):
         inbox = self.root / "inbox"
         account_dir = inbox / "revolut" / "stocks"
