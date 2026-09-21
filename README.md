@@ -13,16 +13,19 @@ La primera versión soporta:
 | Revolut Flexible Cash Funds EUR | `savings-statement_*.tsv` | Aportaciones, compras, ventas, retiradas e interés diario neto |
 | Revolut Flexible Cash Funds USD | `savings-statement_*.tsv` | La misma conversión en USD |
 | XTB | Exportación completa `.xlsx` | Acciones/ETF, efectivo, intereses, impuestos y resultado neto de CFD |
+| Sabadell cuentas | Histórico de movimientos `.txt` | Saldo inicial, ingresos, gastos, intereses y traspasos |
+| Sabadell tarjeta | Extracto de tarjeta `.txt` | Compras y devoluciones |
 
 Fonditel está documentado como siguiente fuente, pero todavía no genera CSV.
-Sabadell se añadirá cuando estén disponibles los TXT de las cuentas.
 
 ## Seguridad y datos
 
-El contenedor no necesita credenciales de Revolut, XTB ni Wealthfolio. Trabaja
-únicamente con archivos exportados por el usuario y no modifica la base de
-datos de Wealthfolio. Los extractos, CSV generados, identificadores de cuenta y
-configuración privada están excluidos de Git.
+El contenedor no necesita credenciales de Revolut, XTB ni Sabadell. Trabaja
+únicamente con archivos exportados por el usuario. La importación automática
+usa un token MCP de Wealthfolio guardado como secreto Docker y limitado a las
+cuentas y actividades; nunca se incluye en la imagen ni en Git. Los extractos,
+CSV generados, identificadores de cuenta y configuración privada también están
+excluidos de Git.
 
 ## Uso directo
 
@@ -87,8 +90,12 @@ data/inbox/
 │   ├── stocks/
 │   ├── savings-eur/
 │   └── savings-usd/
-└── xtb/
-    └── main/
+├── xtb/
+│   └── main/
+└── sabadell/
+    ├── principal/
+    ├── ahorros/
+    └── tarjeta/
 ```
 
 Por ejemplo, un archivo colocado en `inbox/revolut/savings-eur/` usa la clave
@@ -177,6 +184,36 @@ currency,fee,tax,amount,fxRate,subtype,comment
 Los comentarios contienen referencias deterministas. La deduplicación del
 servicio usa el registro persistente y no depende del comportamiento de
 Wealthfolio al reimportar un CSV.
+
+## Reglas de Sabadell
+
+Las cuentas principal y de ahorros usan el TXT de siete columnas que exporta
+Sabadell: fecha de operación, concepto, fecha valor, importe, saldo, NIF y
+referencia. La tarjeta usa el TXT del extracto, con filas de fecha `DD/MM`,
+concepto, localidad e importe. El nombre del fichero de tarjeta debe contener
+una fecha `DDMMYYYY`, de la que se obtiene el año.
+
+- En el primer extracto de una cuenta, el parser calcula el saldo inicial a
+  partir del movimiento más antiguo y su saldo resultante. Esa actividad tiene
+  un identificador estable por cuenta, de modo que los siguientes extractos no
+  vuelven a crearla. Se puede desactivar con `includeOpeningBalance: false` o
+  fijar manualmente `openingBalance` y `openingDate`.
+- Los abonos y cargos se convierten en `DEPOSIT` y `WITHDRAWAL`; la remuneración
+  de la cuenta se registra como `INTEREST` y las comisiones como `FEE`.
+- Los conceptos `TRASPASO` y `TARJETA CREDITO` se registran como
+  `TRANSFER_IN`/`TRANSFER_OUT`. `transferRules` permite identificar el destino.
+  Con `mirror: true`, el mismo fichero genera además la contrapartida en la
+  cuenta indicada por `targetAccount`; el servicio agrupa las actividades y
+  llama a MCP con el UUID correcto para cada cuenta.
+- No se debe activar `mirror` cuando se vayan a importar los extractos de ambos
+  lados del traspaso: cada extracto ya contiene su propia actividad. La
+  configuración de ejemplo solo lo activa para la liquidación mensual de la
+  tarjeta, ya que el extracto de tarjeta contiene compras y devoluciones.
+- En el extracto de tarjeta, los importes positivos son compras y producen
+  `WITHDRAWAL`; los negativos son devoluciones y producen `CREDIT`.
+- La deduplicación usa todos los campos originales de cada movimiento. Un
+  extracto acumulativo o solapado puede depositarse directamente en `inbox`:
+  solo se envían las filas nuevas.
 
 ## Reglas de Revolut Stocks
 

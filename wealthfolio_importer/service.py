@@ -31,6 +31,8 @@ def print_preview(result: ConversionResult, *, limit: int = 8) -> None:
     print(f"Vista previa (primeras {min(limit, len(result.activities))}):")
     for activity in result.activities[:limit]:
         target = activity.symbol or "cash"
+        if activity.target_account:
+            target = f"{target} -> {activity.target_account}"
         print(
             f"  {activity.date} | {activity.activity_type:10} | "
             f"{activity.amount} {activity.currency} | {target}"
@@ -143,28 +145,49 @@ class WatchService:
                 "ni llamar a MCP."
             )
         elif self.auto_import and fresh:
-            account_id = account.get("wealthfolioAccountId", "")
-            if not account_id.strip():
-                raise ValueError(f"Falta wealthfolioAccountId para {key}")
+            groups: dict[str, list[Activity]] = {}
+            for activity in fresh:
+                target_key = activity.target_account or key
+                groups.setdefault(target_key, []).append(activity)
             client = WealthfolioMcpClient.from_environment(
                 self.mcp_url, self.mcp_token_file
             )
-            imported = client.import_activities(
-                fresh,
-                account_id,
-                commit=not self.dry_run,
-                batch_size=self.mcp_batch_size,
-            )
+            totals = {"imported": 0, "skipped": 0, "duplicates": 0}
+            run_ids: list[str] = []
+            for target_key, activities in groups.items():
+                target_config = config["accounts"].get(target_key)
+                if target_config is None:
+                    raise ValueError(
+                        f"La cuenta destino {target_key!r} no existe en config.json"
+                    )
+                account_id = str(target_config.get("wealthfolioAccountId", ""))
+                if not account_id.strip():
+                    raise ValueError(f"Falta wealthfolioAccountId para {target_key}")
+                imported = client.import_activities(
+                    activities,
+                    account_id,
+                    commit=not self.dry_run,
+                    batch_size=self.mcp_batch_size,
+                )
+                totals["imported"] += imported.imported
+                totals["skipped"] += imported.skipped
+                totals["duplicates"] += imported.duplicates
+                run_ids.extend(imported.import_run_ids)
+                print(
+                    f"MCP {target_key}: actividades={len(activities)}, "
+                    f"importadas={imported.imported}, omitidas={imported.skipped}, "
+                    f"duplicados={imported.duplicates}"
+                )
             if self.dry_run:
                 print(
                     "Preview MCP correcto: "
-                    f"{len(fresh)} actividad(es), {imported.duplicates} duplicado(s)."
+                    f"{len(fresh)} actividad(es), {totals['duplicates']} duplicado(s)."
                 )
             else:
                 print(
                     "Importación MCP completada: "
-                    f"importadas={imported.imported}, omitidas={imported.skipped}, "
-                    f"duplicados={imported.duplicates}, runs={','.join(imported.import_run_ids)}"
+                    f"importadas={totals['imported']}, omitidas={totals['skipped']}, "
+                    f"duplicados={totals['duplicates']}, runs={','.join(run_ids)}"
                 )
 
         if self.dry_run:

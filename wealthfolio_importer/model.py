@@ -53,9 +53,13 @@ class Activity:
     fx_rate: Decimal | None = None
     subtype: str = ""
     comment: str = ""
+    target_account: str = ""
+    dedupe_key: str = ""
 
     @property
     def identifier(self) -> str:
+        if self.dedupe_key:
+            return hashlib.sha256(self.dedupe_key.encode("utf-8")).hexdigest()
         raw = "|".join(
             [
                 self.source_ref,

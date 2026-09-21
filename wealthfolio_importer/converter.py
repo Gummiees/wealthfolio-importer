@@ -4,18 +4,28 @@ from pathlib import Path
 from datetime import datetime
 
 from .model import ConversionResult
-from .parsers import parse_revolut_savings, parse_revolut_stocks, parse_xtb
+from .parsers import (
+    parse_revolut_savings,
+    parse_revolut_stocks,
+    parse_sabadell,
+    parse_sabadell_card,
+    parse_xtb,
+)
 
 
 PARSERS = {
     "revolut-stocks": parse_revolut_stocks,
     "revolut-savings": parse_revolut_savings,
+    "sabadell": parse_sabadell,
+    "sabadell-card": parse_sabadell_card,
     "xtb": parse_xtb,
 }
 
 EXTENSIONS = {
     "revolut-stocks": {".tsv"},
     "revolut-savings": {".tsv"},
+    "sabadell": {".txt", ".csv"},
+    "sabadell-card": {".txt"},
     "xtb": {".xlsx"},
 }
 
@@ -29,6 +39,8 @@ ACTIVITY_TYPES = {
     "TAX",
     "FEE",
     "CREDIT",
+    "TRANSFER_IN",
+    "TRANSFER_OUT",
 }
 
 

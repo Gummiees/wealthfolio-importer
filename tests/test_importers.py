@@ -14,6 +14,8 @@ from openpyxl import Workbook
 from wealthfolio_importer.parsers import (
     parse_revolut_savings,
     parse_revolut_stocks,
+    parse_sabadell,
+    parse_sabadell_card,
     parse_xtb,
 )
 from wealthfolio_importer.mcp import McpError, McpImportResult, activity_to_mcp
@@ -110,6 +112,66 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual([a.activity_type for a in result.activities], ["DEPOSIT", "BUY", "INTEREST"])
         self.assertEqual(result.checks["endingCash"], "21")
         self.assertEqual(result.checks["ignoredSubaccountTransfers"], 2)
+
+    def test_sabadell_reconciles_opening_balance_and_mirrors_transfer(self):
+        path = self.write(
+            "16092026_account.txt",
+            "03/01/2026|SUPERMERCADO|03/01/2026|-10,00|140,00||SHOP-1\n"
+            "02/01/2026|REMUN. CUENTA|02/01/2026|2,00|150,00||INT-1\n"
+            "01/01/2026|TRASPASO A AHORROS|01/01/2026|-50,00|148,00||TR-1\n",
+        )
+        config = {
+            "currency": "EUR",
+            "wealthfolioAccountId": "main-id",
+            "transferRules": [
+                {
+                    "pattern": "^TRASPASO A AHORROS$",
+                    "targetAccount": "sabadell/ahorros",
+                    "mirror": True,
+                }
+            ],
+        }
+        result = parse_sabadell(path, config)
+        self.assertEqual(result.checks["statementBalance"], "140.00")
+        self.assertEqual(result.checks["openingBalance"], "198.00")
+        self.assertEqual(result.checks["mirroredTransfers"], 1)
+        self.assertEqual(
+            result.checks["activityCounts"],
+            {
+                "DEPOSIT": 1,
+                "TRANSFER_OUT": 1,
+                "TRANSFER_IN": 1,
+                "INTEREST": 1,
+                "WITHDRAWAL": 1,
+            },
+        )
+        mirror = next(activity for activity in result.activities if activity.target_account)
+        self.assertEqual(mirror.target_account, "sabadell/ahorros")
+        opening = next(activity for activity in result.activities if activity.dedupe_key)
+
+        rolling = self.write(
+            "17092026_account.txt",
+            "17/09/2026|SUPERMERCADO|17/09/2026|-5,00|95,00||SHOP-2\n",
+        )
+        rolling_opening = next(
+            activity
+            for activity in parse_sabadell(rolling, config).activities
+            if activity.dedupe_key
+        )
+        self.assertEqual(opening.identifier, rolling_opening.identifier)
+
+    def test_sabadell_card_maps_purchases_and_refunds(self):
+        path = self.write(
+            "01092026_card.txt",
+            "Extracto de tarjeta\n"
+            "01/09|TIENDA|MADRID|302,00 EUR\n"
+            "02/09|DEVOLUCION|MADRID|-19,56 EUR\n",
+        )
+        result = parse_sabadell_card(path, {"currency": "EUR"})
+        self.assertEqual(
+            [(activity.activity_type, activity.amount) for activity in result.activities],
+            [("WITHDRAWAL", Decimal("302.00")), ("CREDIT", Decimal("19.56"))],
+        )
 
     def test_watch_service_emits_only_new_activities(self):
         inbox = self.root / "inbox"
@@ -221,6 +283,74 @@ class ImporterTests(unittest.TestCase):
         self.assertFalse(list((self.root / "outbox").rglob("*.csv")))
         self.assertFalse(source.exists())
         self.assertTrue(list((self.root / "processed").rglob("latest.tsv")))
+
+    def test_watch_service_routes_mirrored_sabadell_transfer_to_target_account(self):
+        inbox = self.root / "inbox"
+        account_dir = inbox / "sabadell" / "principal"
+        account_dir.mkdir(parents=True)
+        source = account_dir / "01012026_account.txt"
+        source.write_text(
+            "01/01/2026|TRASPASO A AHORROS|01/01/2026|-50,00|150,00||TR-1\n",
+            encoding="utf-8",
+        )
+        config = self.root / "config.json"
+        config.write_text(
+            json.dumps(
+                {
+                    "accounts": {
+                        "sabadell/principal": {
+                            "parser": "sabadell",
+                            "currency": "EUR",
+                            "wealthfolioAccountId": "main-id",
+                            "transferRules": [
+                                {
+                                    "pattern": "^TRASPASO A AHORROS$",
+                                    "targetAccount": "sabadell/ahorros",
+                                    "mirror": True,
+                                }
+                            ],
+                        },
+                        "sabadell/ahorros": {
+                            "parser": "sabadell",
+                            "currency": "EUR",
+                            "wealthfolioAccountId": "savings-id",
+                        },
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        environment = {
+            "CONFIG_PATH": str(config),
+            "INBOX_DIR": str(inbox),
+            "OUTBOX_DIR": str(self.root / "outbox"),
+            "PROCESSED_DIR": str(self.root / "processed"),
+            "FAILED_DIR": str(self.root / "failed"),
+            "STATE_DIR": str(self.root / "state"),
+            "DRY_RUN": "false",
+            "AUTO_IMPORT": "true",
+        }
+        client = mock.Mock()
+        client.import_activities.side_effect = [
+            McpImportResult(2, 0, 0, ["run-main"]),
+            McpImportResult(1, 0, 0, ["run-savings"]),
+        ]
+        with mock.patch.dict(os.environ, environment, clear=False), mock.patch(
+            "wealthfolio_importer.service.WealthfolioMcpClient.from_environment",
+            return_value=client,
+        ):
+            self.assertEqual(WatchService().run_once(), 0)
+
+        self.assertEqual(client.import_activities.call_count, 2)
+        self.assertEqual(
+            [call.args[1] for call in client.import_activities.call_args_list],
+            ["main-id", "savings-id"],
+        )
+        target_activities = client.import_activities.call_args_list[1].args[0]
+        self.assertEqual([activity.activity_type for activity in target_activities], ["TRANSFER_IN"])
+        self.assertFalse(source.exists())
+        state = json.loads((self.root / "state" / "emitted.json").read_text())
+        self.assertEqual(len(state["accounts"]["sabadell/principal"]), 3)
 
 
 if __name__ == "__main__":

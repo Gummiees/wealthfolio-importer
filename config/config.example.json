@@ -31,6 +31,35 @@
       "tickerCurrencies": {
         "CSPX.UK": "USD"
       }
+    },
+    "sabadell/principal": {
+      "parser": "sabadell",
+      "currency": "EUR",
+      "wealthfolioAccountId": "",
+      "includeOpeningBalance": true,
+      "transferRules": [
+        {
+          "pattern": "^TRASPASO(?: A)? \\d{4}-\\d{8}-\\d{2}\\b",
+          "targetAccount": "sabadell/ahorros",
+          "mirror": false
+        },
+        {
+          "pattern": "^TARJETA CREDITO\\b",
+          "targetAccount": "sabadell/tarjeta",
+          "mirror": true
+        }
+      ]
+    },
+    "sabadell/ahorros": {
+      "parser": "sabadell",
+      "currency": "EUR",
+      "wealthfolioAccountId": "",
+      "includeOpeningBalance": true
+    },
+    "sabadell/tarjeta": {
+      "parser": "sabadell-card",
+      "currency": "EUR",
+      "wealthfolioAccountId": ""
     }
   }
 }
