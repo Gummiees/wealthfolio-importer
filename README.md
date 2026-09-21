@@ -160,6 +160,25 @@ generar otro CSV: colocar una exportación histórica completa en cada cuenta,
 usar temporalmente `DRY_RUN=false` y `SEED_STATE_ONLY=true`, esperar a que los
 archivos pasen a `processed/` y volver a poner `SEED_STATE_ONLY=false`.
 
+### Gastos y categorización
+
+Importar actividades no incluye automáticamente una cuenta en el módulo de
+gastos. Para cuentas corrientes, de ahorro y tarjetas:
+
+1. Abrir **Settings → Spending Tracker** y mantener el tracker activado.
+2. Activar cada cuenta en **Spending accounts**. El resumen debe mostrar
+   `Tracking N of N cash accounts`.
+3. Importar o dejar que el watcher procese los extractos.
+4. Si ya había movimientos, abrir **Categorization rules → Re-run rules →
+   Categorize uncategorized** para aplicar las reglas sin sobrescribir las
+   categorías manuales.
+
+Wealthfolio aplica las reglas al texto visible en **Name / Notes**. Los parsers
+conservan ahí el concepto bancario o el comercio mediante `comment`, por lo que
+no hace falta una columna adicional para categorizar. Los movimientos que sigan
+como `UNCATEGORIZED` no coinciden con ninguna regla configurada y requieren una
+regla nueva o una categoría manual.
+
 ## Portainer
 
 `portainer-stack.yml` usa la imagen
