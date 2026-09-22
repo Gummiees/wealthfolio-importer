@@ -86,6 +86,8 @@ class ImporterTests(unittest.TestCase):
             },
         )
         self.assertIn("Google Cloud", next(a.comment for a in result.activities if a.amount == 5))
+        self.assertEqual(result.activities[0].date, "2026-09-02")
+        self.assertTrue(all("T" not in activity.date for activity in result.activities))
 
         repeated = parse_revolut_current(path, {"currency": "EUR", "wealthfolioAccountId": "current-account-id"})
         self.assertEqual(

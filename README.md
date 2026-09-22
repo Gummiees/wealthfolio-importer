@@ -269,6 +269,8 @@ cuenta EUR se deposita directamente en `inbox/revolut/current-eur/`.
   como `TRANSFER_IN`/`TRANSFER_OUT`; así no cuentan como gasto ni ingreso.
 - Las comisiones se registran por separado como `FEE`. Cada fila se reconcilia
   con el saldo posterior antes de generar o importar actividades.
+- Las fechas se envían como `YYYY-MM-DD`: Wealthfolio 3.8 rechaza en el commit
+  las horas locales sin zona que incluye el TSV, aunque su preview las acepte.
 - La deduplicación incluye fecha, tipo, descripción, importes, divisa y saldo.
   Se puede depositar cada nuevo extracto sin recortarlo manualmente.
 - Un tipo de operación desconocido detiene la conversión para evitar una

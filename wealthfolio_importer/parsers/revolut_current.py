@@ -194,9 +194,7 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
         if opening_date:
             datetime.fromisoformat(opening_date)
         else:
-            opening_date = (parsed[0]["date"] - timedelta(seconds=1)).isoformat(
-                timespec="seconds"
-            )
+            opening_date = (parsed[0]["date"] - timedelta(days=1)).date().isoformat()
         activities.append(
             Activity(
                 date=opening_date,
@@ -228,7 +226,7 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
             )
             activities.append(
                 Activity(
-                    date=row["date"].isoformat(timespec="seconds"),
+                    date=row["date"].date().isoformat(),
                     activity_type=activity_type,
                     currency=row["currency"],
                     amount=abs(row["amount"]),
@@ -243,7 +241,7 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
         if row["fee"]:
             activities.append(
                 Activity(
-                    date=row["date"].isoformat(timespec="seconds"),
+                    date=row["date"].date().isoformat(),
                     activity_type="FEE",
                     currency=row["currency"],
                     amount=row["fee"],
