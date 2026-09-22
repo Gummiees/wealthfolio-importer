@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wealthfolio-importer"
-version = "0.3.1"
+version = "0.4.0"
 description = "Convert broker exports into Wealthfolio activity CSV files"
 readme = "README.md"
 requires-python = ">=3.12"

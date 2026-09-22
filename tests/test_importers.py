@@ -12,6 +12,7 @@ from unittest import mock
 from openpyxl import Workbook
 
 from wealthfolio_importer.parsers import (
+    parse_revolut_current,
     parse_revolut_savings,
     parse_revolut_stocks,
     parse_sabadell,
@@ -49,6 +50,70 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual([a.activity_type for a in result.activities], ["DEPOSIT", "BUY", "TAX", "CREDIT"])
         self.assertEqual(result.activities[0].fx_rate, Decimal("0.8"))
         self.assertEqual(result.activities[-1].subtype, "REIMBURSEMENT")
+
+    def test_revolut_current_reconciles_and_excludes_internal_transfers_from_spending(self):
+        path = self.write(
+            "account.tsv",
+            "Tipo\tProducto\tFecha de inicio\tFecha de finalizaciÃ³n\tDescripciÃ³n\t"
+            "Importe\tComisiÃ³n\tDivisa\tState\tSaldo\n"
+            "Transferir\tActual\t2026-09-03 0:00:11\t2026-09-03 0:00:11\t"
+            "To Francisco Javier Caro Munar\t-248.04\t0\tEUR\tCOMPLETADO\t299.13\n"
+            "Transferir\tActual\t2026-09-07 9:58:16\t2026-09-07 9:58:16\t"
+            "Desde EUR Ahorro Euro\t1000\t0\tEUR\tCOMPLETADO\t1299.13\n"
+            "Cambio\tActual\t2026-09-07 9:58:52\t2026-09-07 9:58:52\t"
+            "ConversiÃ³n a USD\t-648.22\t0\tEUR\tCOMPLETADO\t650.91\n"
+            "Pago con tarjeta\tActual\t2026-09-17 9:08:18\t2026-09-17 9:08:18\t"
+            "Google Cloud\t-5\t0\tEUR\tCOMPLETADO\t645.91\n"
+            "Transferir\tActual\t2026-09-17 9:08:19\t2026-09-17 9:08:19\t"
+            "A EUR Ahorro Euro\t-1\t0\tEUR\tCOMPLETADO\t644.91\n",
+        )
+        result = parse_revolut_current(
+            path,
+            {
+                "currency": "EUR",
+                "wealthfolioAccountId": "current-account-id",
+            },
+        )
+        self.assertEqual(result.checks["openingBalance"], "547.17")
+        self.assertEqual(result.checks["statementBalance"], "644.91")
+        self.assertEqual(
+            result.checks["activityCounts"],
+            {
+                "DEPOSIT": 1,
+                "WITHDRAWAL": 2,
+                "TRANSFER_IN": 1,
+                "TRANSFER_OUT": 2,
+            },
+        )
+        self.assertIn("Google Cloud", next(a.comment for a in result.activities if a.amount == 5))
+
+        repeated = parse_revolut_current(path, {"currency": "EUR", "wealthfolioAccountId": "current-account-id"})
+        self.assertEqual(
+            [activity.identifier for activity in result.activities],
+            [activity.identifier for activity in repeated.activities],
+        )
+
+    def test_revolut_current_skips_pending_rows_and_reconciles_fees(self):
+        path = self.write(
+            "account.tsv",
+            "Tipo\tProducto\tFecha de inicio\tFecha de finalización\tDescripción\t"
+            "Importe\tComisión\tDivisa\tState\tSaldo\n"
+            "Transferir\tActual\t2026-09-01 10:00:00\t2026-09-01 10:00:01\t"
+            "From employer\t100\t1\tEUR\tCOMPLETADO\t199\n"
+            "Pago con tarjeta\tActual\t2026-09-02 10:00:00\t\t"
+            "Pending shop\t-10\t0\tEUR\tPENDIENTE\t199\n",
+        )
+        result = parse_revolut_current(
+            path,
+            {"currency": "EUR", "wealthfolioAccountId": "current-account-id"},
+        )
+        self.assertEqual(result.checks["openingBalance"], "100")
+        self.assertEqual(result.checks["skippedRows"], 1)
+        self.assertEqual(
+            result.checks["activityCounts"],
+            {"DEPOSIT": 2, "FEE": 1},
+        )
+        self.assertTrue(result.warnings)
 
     def test_revolut_savings_reconciles_interest_reinvestment_and_withdrawal(self):
         path = self.write(

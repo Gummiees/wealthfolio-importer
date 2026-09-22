@@ -1,5 +1,11 @@
 {
   "accounts": {
+    "revolut/current-eur": {
+      "parser": "revolut-current",
+      "currency": "EUR",
+      "wealthfolioAccountId": "",
+      "includeOpeningBalance": true
+    },
     "revolut/stocks": {
       "parser": "revolut-stocks",
       "currency": "USD",

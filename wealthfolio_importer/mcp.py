@@ -166,7 +166,7 @@ class WealthfolioMcpClient:
                 "params": {
                     "protocolVersion": "2025-03-26",
                     "capabilities": {},
-                    "clientInfo": {"name": "wealthfolio-importer", "version": "0.3.1"},
+                    "clientInfo": {"name": "wealthfolio-importer", "version": "0.4.0"},
                 },
             }
         )

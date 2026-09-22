@@ -5,6 +5,7 @@ from datetime import datetime
 
 from .model import ConversionResult
 from .parsers import (
+    parse_revolut_current,
     parse_revolut_savings,
     parse_revolut_stocks,
     parse_sabadell,
@@ -16,6 +17,7 @@ from .parsers import (
 PARSERS = {
     "revolut-stocks": parse_revolut_stocks,
     "revolut-savings": parse_revolut_savings,
+    "revolut-current": parse_revolut_current,
     "sabadell": parse_sabadell,
     "sabadell-card": parse_sabadell_card,
     "xtb": parse_xtb,
@@ -24,6 +26,7 @@ PARSERS = {
 EXTENSIONS = {
     "revolut-stocks": {".tsv"},
     "revolut-savings": {".tsv"},
+    "revolut-current": {".tsv"},
     "sabadell": {".txt", ".csv"},
     "sabadell-card": {".txt"},
     "xtb": {".xlsx"},

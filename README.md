@@ -9,6 +9,7 @@ La primera versión soporta:
 
 | Fuente | Entrada | Resultado |
 | --- | --- | --- |
+| Revolut cuenta corriente | `account-statement_*.tsv` | Saldo inicial, pagos, ingresos, comisiones, traspasos y cambios de divisa |
 | Revolut Stocks | `trading-account-statement_*.tsv` | Compras, ventas, dividendos, correcciones fiscales, depósitos y retiradas |
 | Revolut Flexible Cash Funds EUR | `savings-statement_*.tsv` | Aportaciones, compras, ventas, retiradas e interés diario neto |
 | Revolut Flexible Cash Funds USD | `savings-statement_*.tsv` | La misma conversión en USD |
@@ -87,6 +88,7 @@ La ruta de entrada identifica la configuración de la cuenta:
 ```text
 data/inbox/
 ├── revolut/
+│   ├── current-eur/
 │   ├── stocks/
 │   ├── savings-eur/
 │   └── savings-usd/
@@ -249,6 +251,28 @@ una fecha `DDMMYYYY`, de la que se obtiene el año.
   divisa del activo.
 - Cualquier tipo nuevo detiene la conversión para evitar una clasificación
   silenciosa incorrecta.
+
+## Reglas de Revolut cuenta corriente
+
+El extracto se obtiene en Revolut como TSV de la cuenta corriente. Para la
+cuenta EUR se deposita directamente en `inbox/revolut/current-eur/`.
+
+- Solo se importan filas con estado `COMPLETADO`/`COMPLETED`; las pendientes o
+  rechazadas se omiten y se muestran en los avisos del preview.
+- En el primer extracto se calcula el saldo inicial desde el primer movimiento.
+  Su identificador es estable por cuenta, de modo que los extractos solapados
+  posteriores no vuelven a crearlo.
+- Pagos con tarjeta, pagos de Revolut y transferencias externas son gastos o
+  ingresos (`WITHDRAWAL`, `DEPOSIT` o `CREDIT`) y conservan el comercio o
+  destinatario en las notas para la categorización.
+- Los movimientos desde/hacia `EUR Ahorro` y los cambios de divisa se registran
+  como `TRANSFER_IN`/`TRANSFER_OUT`; así no cuentan como gasto ni ingreso.
+- Las comisiones se registran por separado como `FEE`. Cada fila se reconcilia
+  con el saldo posterior antes de generar o importar actividades.
+- La deduplicación incluye fecha, tipo, descripción, importes, divisa y saldo.
+  Se puede depositar cada nuevo extracto sin recortarlo manualmente.
+- Un tipo de operación desconocido detiene la conversión para evitar una
+  clasificación silenciosa incorrecta.
 
 ## Reglas de Revolut Flexible Cash Funds
 
