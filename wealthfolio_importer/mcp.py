@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -25,7 +26,10 @@ def _mcp_date(value: str) -> str:
     """
     parsed = datetime.fromisoformat(value)
     if "T" in value and parsed.tzinfo is None:
-        return parsed.date().isoformat()
+        # Revolut's Spanish statements use Europe/Madrid local time. Preserve
+        # the sequence of same-day events, including the DST offset, while
+        # making the value RFC3339-valid for Wealthfolio.
+        return parsed.replace(tzinfo=ZoneInfo("Europe/Madrid")).isoformat()
     return value
 
 

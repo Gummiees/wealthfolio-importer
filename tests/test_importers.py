@@ -315,7 +315,7 @@ class ImporterTests(unittest.TestCase):
         )
         self.assertEqual(
             activity_to_mcp(local_timestamp, "account-1", 8)["date"],
-            "2025-01-01",
+            "2025-01-01T10:00:00+01:00",
         )
 
         unsafe = Activity(
