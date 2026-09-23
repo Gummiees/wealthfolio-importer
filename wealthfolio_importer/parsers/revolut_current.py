@@ -187,6 +187,7 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
 
     activities: list[Activity] = []
     counts: dict[str, int] = {}
+    mirrored = 0
     account_key = str(config.get("wealthfolioAccountId") or path.parent.name)
     if config.get("includeOpeningBalance", True) and opening:
         opening_type = "DEPOSIT" if opening > 0 else "WITHDRAWAL"
@@ -238,6 +239,22 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
                 )
             )
             counts[activity_type] = counts.get(activity_type, 0) + 1
+            transfer = _transfer_rule(row["description"], config)
+            if transfer and transfer.get("mirror", False):
+                target = str(transfer.get("targetAccount", "")).strip()
+                if not target:
+                    raise ValueError(f"Línea {row['line']}: transferRules mirror requiere targetAccount")
+                activities.append(
+                    Activity(
+                        date=row["date"].date().isoformat(),
+                        activity_type="TRANSFER_IN" if activity_type == "TRANSFER_OUT" else "TRANSFER_OUT",
+                        currency=row["currency"], amount=abs(row["amount"]),
+                        source_ref=f"revolut-current:{raw_ref}:mirror:{target}",
+                        target_account=target,
+                        comment=f"Revolut: transferencia interna espejo de {row['description']}",
+                    )
+                )
+                mirrored += 1
         if row["fee"]:
             activities.append(
                 Activity(
@@ -272,6 +289,7 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
             "statementBalance": str(parsed[-1]["balance"]),
             "reconstructedBalance": str(previous_balance),
             "activityCounts": counts,
+            "mirroredTransfers": mirrored,
         },
         warnings=warnings,
     ).sorted()

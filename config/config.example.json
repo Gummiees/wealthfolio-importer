@@ -4,7 +4,10 @@
       "parser": "revolut-current",
       "currency": "EUR",
       "wealthfolioAccountId": "",
-      "includeOpeningBalance": true
+      "includeOpeningBalance": true,
+      "transferRules": [
+        {"pattern": "(?:desde|a|from|to) EUR Ahorro", "targetAccount": "revolut/savings-eur", "mirror": true}
+      ]
     },
     "revolut/stocks": {
       "parser": "revolut-stocks",
