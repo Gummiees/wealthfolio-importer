@@ -124,6 +124,15 @@ exportación acumulativa vuelva a generar todo el histórico. El estado signific
 "CSV emitido"; la importación manual en Wealthfolio sigue siendo
 responsabilidad del usuario.
 
+Para rehacer deliberadamente una única cuenta ya procesada, se puede cambiar
+su `stateResetToken` por un valor nuevo y activar `replayProcessedFile` en la
+misma entrada de `config.json`. El servicio borra solamente las claves de esa
+cuenta y vuelve a colocar el último extracto procesado en su `inbox`. Es una
+operación de recuperación: debe usarse una vez, verificar el resultado en
+Wealthfolio y dejar el token sin cambios para que no vuelva a repetir el
+histórico. Las claves de deduplicación incluyen la cuenta de destino, por lo
+que este mecanismo no afecta a las demás cuentas.
+
 ### Importación automática mediante MCP
 
 Wealthfolio 3.8 incorpora un servidor MCP oficial con importación de
@@ -152,7 +161,9 @@ y llama a `commit_activity_import`; el estado local y el movimiento a
 `processed` solo se actualizan después de que Wealthfolio confirme el commit.
 
 El protocolo limita cada llamada a 1000 filas; el servicio usa lotes de 500 de
-forma predeterminada. Wealthfolio 3.8 no permite enviar por MCP `fxRate`, `isin`
+forma predeterminada. Si el servidor tiene conflictos al crear el mismo activo
+en un lote, `MCP_IMPORT_BATCH_SIZE=1` permite importar una actividad por llamada
+y conservar el mismo control de deduplicación. Wealthfolio 3.8 no permite enviar por MCP `fxRate`, `isin`
 o `instrumentType`: Wealthfolio los resuelve con su histórico de divisas y el
 símbolo existente. Si una actividad contiene `tax` o `subtype`, la importación
 se detiene para evitar perder información estructurada.

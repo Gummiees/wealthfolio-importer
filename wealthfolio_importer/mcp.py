@@ -7,8 +7,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from .model import Activity, decimal_text
 
@@ -110,12 +108,17 @@ class McpImportResult:
 
 
 class WealthfolioMcpClient:
+    """Synchronous facade over the official asynchronous MCP HTTP transport.
+
+    Wealthfolio uses the legacy, session-based Streamable HTTP variant. Its
+    responses are SSE streams that stay open after a message, so a generic HTTP
+    reader cannot reliably use EOF as a protocol boundary.
+    """
+
     def __init__(self, url: str, token: str, *, timeout: float = 60) -> None:
         self.url = url.rstrip("/")
         self.token = token.strip()
         self.timeout = timeout
-        self.session_id: str | None = None
-        self.request_id = 0
         if not self.token:
             raise McpError("El token MCP está vacío")
 
@@ -127,152 +130,46 @@ class WealthfolioMcpClient:
             raise McpError(f"No existe el secreto MCP: {token_file}") from error
         return cls(url, token, timeout=timeout)
 
-    @staticmethod
-    def _parse_response(body: bytes) -> dict[str, Any]:
-        text = body.decode("utf-8")
-        for line in text.splitlines():
-            if line.startswith("data:"):
-                payload = line[5:].strip()
-                if payload:
-                    try:
-                        return json.loads(payload)
-                    except json.JSONDecodeError:
-                        continue
+    async def _call_async(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         try:
-            return json.loads(text)
-        except json.JSONDecodeError as error:
-            raise McpError(f"Respuesta MCP no reconocida: {text[:300]}") from error
-
-    def _post(self, payload: dict[str, Any], *, expect_json: bool = True) -> dict[str, Any]:
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            # Wealthfolio 3.8 keeps legacy MCP response streams open after a
-            # response. Closing each HTTP connection makes both JSON and SSE
-            # responses finite without affecting the MCP session header.
-            "Connection": "close",
-        }
-        if self.session_id:
-            headers["mcp-session-id"] = self.session_id
-        request = Request(
-            self.url,
-            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
+            from mcp import ClientSession
+            from mcp.client.streamable_http import streamablehttp_client
+        except ImportError as error:  # pragma: no cover - deployment dependency
+            raise McpError("Falta la dependencia 'mcp' para la importación automática") from error
         try:
-            with urlopen(request, timeout=self.timeout) as response:
-                if not self.session_id:
-                    self.session_id = response.headers.get("mcp-session-id")
-                content_type = response.headers.get("Content-Type", "")
-                if "text/event-stream" not in content_type:
-                    # Streamable HTTP can return application/json on a
-                    # persistent connection.  Reading to EOF waits forever;
-                    # consume it until a complete JSON-RPC object is present.
-                    buffer = bytearray()
-                    body = b""
-                    while True:
-                        chunk = response.read(1)
-                        if not chunk:
-                            break
-                        buffer.extend(chunk)
-                        try:
-                            json.loads(buffer)
-                        except json.JSONDecodeError:
-                            continue
-                        body = bytes(buffer)
-                        break
-                    if not body and expect_json:
-                        raise McpError("La respuesta MCP terminó sin JSON-RPC")
-                else:
-                    # Wealthfolio may keep an SSE response open after publishing
-                    # the JSON-RPC result. Stop at this request's first result
-                    # instead of waiting for the stream to close.
-                    body = b""
-                    for raw_line in response:
-                        if not raw_line.startswith(b"data:"):
-                            continue
-                        candidate = raw_line[5:].strip()
-                        if not candidate:
-                            continue
-                        try:
-                            message = json.loads(candidate)
-                        except json.JSONDecodeError:
-                            continue
-                        # rmcp returns the response as the only result event on
-                        # this per-request stream, but does not consistently
-                        # echo the JSON-RPC id.  A response is still
-                        # unambiguous because notifications have neither field.
-                        if "result" in message or "error" in message:
-                            body = candidate
-                            break
-                    if not body and expect_json:
-                        raise McpError("El stream MCP terminó sin respuesta JSON-RPC")
-        except HTTPError as error:
-            detail = error.read().decode("utf-8", errors="replace")
-            raise McpError(f"Wealthfolio MCP respondió HTTP {error.code}: {detail[:500]}") from error
-        except URLError as error:
-            raise McpError(f"No se puede conectar con Wealthfolio MCP: {error.reason}") from error
-        if not expect_json:
-            return {}
-        message = self._parse_response(body)
-        if "error" in message:
-            raise McpError(f"Error JSON-RPC de Wealthfolio: {message['error']}")
-        return message
-
-    def initialize(self) -> None:
-        self.request_id += 1
-        message = self._post(
-            {
-                "jsonrpc": "2.0",
-                "id": self.request_id,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-03-26",
-                    "capabilities": {},
-                    "clientInfo": {"name": "wealthfolio-importer", "version": "0.4.0"},
-                },
-            }
-        )
-        name = message.get("result", {}).get("serverInfo", {}).get("name")
-        if name != "wealthfolio" or not self.session_id:
-            raise McpError("La inicialización MCP no devolvió una sesión válida de Wealthfolio")
-        self._post(
-            {"jsonrpc": "2.0", "method": "notifications/initialized"},
-            expect_json=False,
-        )
-
-    def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        if not self.session_id:
-            self.initialize()
-        self.request_id += 1
-        message = self._post(
-            {
-                "jsonrpc": "2.0",
-                "id": self.request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            }
-        )
-        result = message.get("result", {})
-        if result.get("isError"):
-            content = result.get("content", [])
-            text = "; ".join(item.get("text", "") for item in content if isinstance(item, dict))
+            async with streamablehttp_client(
+                self.url,
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=self.timeout,
+                sse_read_timeout=self.timeout,
+            ) as (read_stream, write_stream, _get_session_id):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    result = await session.call_tool(name, arguments)
+        except Exception as error:
+            raise McpError(f"Error al comunicarse con Wealthfolio MCP: {error}") from error
+        if result.isError:
+            text = "; ".join(
+                getattr(item, "text", "") for item in result.content if getattr(item, "text", None)
+            )
             raise McpError(f"La herramienta MCP {name} falló: {text or result}")
-        structured = result.get("structuredContent")
+        structured = result.structuredContent
         if isinstance(structured, dict):
             return structured
-        content = result.get("content", [])
-        for item in content:
-            if isinstance(item, dict) and item.get("type") == "text":
+        for item in result.content:
+            text = getattr(item, "text", None)
+            if text:
                 try:
-                    parsed = json.loads(item.get("text", ""))
+                    parsed = json.loads(text)
                 except json.JSONDecodeError:
                     continue
                 if isinstance(parsed, dict):
                     return parsed
         raise McpError(f"La herramienta MCP {name} no devolvió contenido estructurado")
+
+    def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        import asyncio
+        return asyncio.run(self._call_async(name, arguments))
 
     def prepare(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
         return self.call("prepare_activity_import", {"activities": rows})
@@ -280,37 +177,23 @@ class WealthfolioMcpClient:
     def commit(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
         return self.call("commit_activity_import", {"activities": rows})
 
-    def import_activities(
-        self,
-        activities: list[Activity],
-        account_id: str,
-        *,
-        commit: bool,
-        batch_size: int = 500,
-    ) -> McpImportResult:
+    def import_activities(self, activities: list[Activity], account_id: str, *, commit: bool, batch_size: int = 500) -> McpImportResult:
         if not account_id.strip():
             raise McpError("Falta wealthfolioAccountId en la cuenta")
         if batch_size < 1 or batch_size > 1000:
             raise McpError("MCP_IMPORT_BATCH_SIZE debe estar entre 1 y 1000")
-
         imported = skipped = duplicates = 0
         run_ids: list[str] = []
         for offset in range(0, len(activities), batch_size):
             chunk = activities[offset : offset + batch_size]
-            rows = [
-                activity_to_mcp(activity, account_id, offset + index + 1)
-                for index, activity in enumerate(chunk)
-            ]
+            rows = [activity_to_mcp(activity, account_id, offset + index + 1) for index, activity in enumerate(chunk)]
             preview = self.prepare(rows)
             summary = preview.get("summary", {})
             invalid = int(summary.get("invalid", 0))
             duplicates += int(summary.get("duplicates", 0))
             if invalid:
                 bad_rows = [row for row in preview.get("rows", []) if not row.get("isValid", False)]
-                raise McpError(
-                    f"Wealthfolio rechazó {invalid} actividad(es) en el preview: "
-                    + json.dumps(bad_rows[:10], ensure_ascii=False)
-                )
+                raise McpError(f"Wealthfolio rechazó {invalid} actividad(es) en el preview: " + json.dumps(bad_rows[:10], ensure_ascii=False))
             if not commit:
                 continue
             result = self.commit(rows)
@@ -319,10 +202,7 @@ class WealthfolioMcpClient:
             skipped += int(commit_summary.get("skipped", 0))
             failed = result.get("failed", [])
             if failed:
-                raise McpError(
-                    "Wealthfolio devolvió filas fallidas después del commit: "
-                    + json.dumps(failed[:10], ensure_ascii=False)
-                )
+                raise McpError("Wealthfolio devolvió filas fallidas después del commit: " + json.dumps(failed[:10], ensure_ascii=False))
             run_id = result.get("importRunId")
             if run_id:
                 run_ids.append(str(run_id))
