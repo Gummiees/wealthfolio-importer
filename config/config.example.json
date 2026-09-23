@@ -20,6 +20,7 @@
       "symbol": "REV-CASH-EUR",
       "isin": "IE000AZVL3K0",
       "wealthfolioAccountId": "",
+      "externalTransfers": true,
       "amountOverrides": {}
     },
     "revolut/savings-usd": {

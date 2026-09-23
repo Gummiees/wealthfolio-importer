@@ -144,6 +144,21 @@ class ImporterTests(unittest.TestCase):
         withdrawal = next(a for a in result.activities if a.activity_type == "WITHDRAWAL")
         self.assertEqual(withdrawal.amount, Decimal("1000.10"))
 
+        transferred = parse_revolut_savings(
+            path,
+            {
+                "currency": "EUR",
+                "symbol": "REV-CASH-EUR",
+                "isin": "TEST",
+                "externalTransfers": True,
+            },
+        )
+        self.assertEqual(
+            transferred.checks["activityCounts"],
+            {"TRANSFER_IN": 1, "BUY": 2, "INTEREST": 2, "SELL": 1, "TRANSFER_OUT": 1},
+        )
+        self.assertEqual(Decimal(transferred.checks["endingCash"]), Decimal("0"))
+
     def test_xtb_reconciles_cash_and_open_positions(self):
         path = self.root / "xtb.xlsx"
         workbook = Workbook()

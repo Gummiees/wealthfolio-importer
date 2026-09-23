@@ -286,9 +286,12 @@ USD y tracking mode `Transactions`. Los activos analizados son
   neto.
 - `Return Reinvested` se empareja con su `BUY`; ese `BUY` consume el efectivo
   generado por los intereses y no crea otro depósito.
-- Un `BUY` externo genera `DEPOSIT` un segundo antes y después `BUY`.
-- Un `SELL` genera `SELL` y después `WITHDRAWAL`. `Return WITHDRAWN`, cuando
+- Por defecto, un `BUY` externo genera `DEPOSIT` un segundo antes y después `BUY`;
+  un `SELL` genera `SELL` y después `WITHDRAWAL`. `Return WITHDRAWN`, cuando
   existe, se añade a la retirada.
+- Para cuentas de ahorro financiadas desde otra cuenta ya importada, activa
+  `externalTransfers: true`: esas mismas entradas y salidas pasan a ser
+  `TRANSFER_IN` y `TRANSFER_OUT`, para que Wealthfolio pueda vincularlas.
 - Las fechas aceptan abreviaturas españolas e inglesas.
 - El parser trata explícitamente las abreviaturas ambiguas del TSV español:
   `4.5` en una operación externa representa 4.500. Para un entero pequeño sin

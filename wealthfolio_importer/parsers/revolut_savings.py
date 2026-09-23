@@ -201,6 +201,7 @@ def _find_temporal_match(
 
 def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
     currency = config.get("currency", "EUR")
+    external_transfers = bool(config.get("externalTransfers", False))
     symbol = config.get("symbol", f"REV-CASH-{currency}")
     isin = config.get("isin", "")
     value_column = f"Value, {currency}"
@@ -321,11 +322,15 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
             activities.append(
                 Activity(
                     date=iso_local(row.date - timedelta(seconds=1)),
-                    activity_type="DEPOSIT",
+                    activity_type="TRANSFER_IN" if external_transfers else "DEPOSIT",
                     currency=currency,
                     amount=amount,
-                    source_ref=f"revolut-savings-deposit:{ref}",
-                    comment=f"Revolut {currency}: aportación externa [{ref[:16]}]",
+                    source_ref=f"revolut-savings-{'transfer-in' if external_transfers else 'deposit'}:{ref}",
+                    comment=(
+                        f"Revolut {currency}: transferencia interna al fondo [{ref[:16]}]"
+                        if external_transfers
+                        else f"Revolut {currency}: aportación externa [{ref[:16]}]"
+                    ),
                 )
             )
         activities.append(
@@ -371,11 +376,15 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
         activities.append(
             Activity(
                 date=iso_local(row.date + timedelta(seconds=1)),
-                activity_type="WITHDRAWAL",
+                activity_type="TRANSFER_OUT" if external_transfers else "WITHDRAWAL",
                 currency=currency,
                 amount=withdrawn,
-                source_ref=f"revolut-savings-withdrawal:{ref}",
-                comment=f"Revolut {currency}: retirada externa [{ref[:16]}]",
+                source_ref=f"revolut-savings-{'transfer-out' if external_transfers else 'withdrawal'}:{ref}",
+                comment=(
+                    f"Revolut {currency}: transferencia interna desde el fondo [{ref[:16]}]"
+                    if external_transfers
+                    else f"Revolut {currency}: retirada externa [{ref[:16]}]"
+                ),
             )
         )
 
@@ -388,7 +397,7 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
         a.amount
         * (
             1
-            if a.activity_type in {"DEPOSIT", "INTEREST", "SELL", "CREDIT", "DIVIDEND"}
+            if a.activity_type in {"DEPOSIT", "TRANSFER_IN", "INTEREST", "SELL", "CREDIT", "DIVIDEND"}
             else -1
         )
         for a in activities
