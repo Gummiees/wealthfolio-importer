@@ -133,6 +133,11 @@ Wealthfolio y dejar el token sin cambios para que no vuelva a repetir el
 histórico. Las claves de deduplicación incluyen la cuenta de destino, por lo
 que este mecanismo no afecta a las demás cuentas.
 
+Los fondos flexibles de Revolut pueden usar `cashOnly: true` en la cuenta. En
+ese modo se registran las aportaciones, retiradas e intereses netos directamente
+como efectivo; es el ajuste recomendado para Wealthfolio cuando el objetivo es
+seguir el saldo del fondo y no crear un activo negociable artificial.
+
 ### Importación automática mediante MCP
 
 Wealthfolio 3.8 incorpora un servidor MCP oficial con importación de

@@ -159,6 +159,16 @@ class ImporterTests(unittest.TestCase):
         )
         self.assertEqual(Decimal(transferred.checks["endingCash"]), Decimal("0"))
 
+        cash_only = parse_revolut_savings(
+            path,
+            {"currency": "EUR", "cashOnly": True},
+        )
+        self.assertEqual(
+            cash_only.checks["activityCounts"],
+            {"DEPOSIT": 1, "INTEREST": 2, "WITHDRAWAL": 1},
+        )
+        self.assertTrue(all(not activity.symbol for activity in cash_only.activities))
+
     def test_xtb_reconciles_cash_and_open_positions(self):
         path = self.root / "xtb.xlsx"
         workbook = Workbook()

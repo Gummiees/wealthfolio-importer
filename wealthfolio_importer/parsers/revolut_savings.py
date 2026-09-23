@@ -202,6 +202,9 @@ def _find_temporal_match(
 def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
     currency = config.get("currency", "EUR")
     external_transfers = bool(config.get("externalTransfers", False))
+    # A cash account models a Flexible Cash Fund by its balance. This avoids
+    # inventing a tradable asset solely to represent a EUR/USD deposit.
+    cash_only = bool(config.get("cashOnly", False))
     symbol = config.get("symbol", f"REV-CASH-{currency}")
     isin = config.get("isin", "")
     value_column = f"Value, {currency}"
@@ -307,9 +310,9 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
                 currency=currency,
                 amount=amount,
                 source_ref=f"revolut-savings-interest:{ref}",
-                symbol=symbol,
-                instrument_type="EQUITY",
-                isin=isin,
+                symbol="" if cash_only else symbol,
+                instrument_type="" if cash_only else "EQUITY",
+                isin="" if cash_only else isin,
                 comment=f"Revolut {currency}: rendimiento neto diario [{ref[:16]}]",
             )
         )
@@ -333,46 +336,48 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
                     ),
                 )
             )
-        activities.append(
-            Activity(
-                date=iso_local(row.date),
-                activity_type="BUY",
-                currency=currency,
-                amount=amount,
-                source_ref=f"revolut-savings-buy:{ref}",
-                symbol=symbol,
-                instrument_type="EQUITY",
-                isin=isin,
-                quantity=amount,
-                unit_price=Decimal("1"),
-                comment=(
-                    f"Revolut {currency}: reinversión [{ref[:16]}]"
-                    if marker
-                    else f"Revolut {currency}: compra [{ref[:16]}]"
-                ),
+        if not cash_only:
+            activities.append(
+                Activity(
+                    date=iso_local(row.date),
+                    activity_type="BUY",
+                    currency=currency,
+                    amount=amount,
+                    source_ref=f"revolut-savings-buy:{ref}",
+                    symbol=symbol,
+                    instrument_type="EQUITY",
+                    isin=isin,
+                    quantity=amount,
+                    unit_price=Decimal("1"),
+                    comment=(
+                        f"Revolut {currency}: reinversión [{ref[:16]}]"
+                        if marker
+                        else f"Revolut {currency}: compra [{ref[:16]}]"
+                    ),
+                )
             )
-        )
 
     for row in by_kind["SELL"]:
         amount = trade_amounts[row.line]
         marker = withdrawn_by_sell.get(row.line)
         withdrawn = amount + (abs(marker.value) if marker else Decimal("0"))
         ref = source_hash(row.ref, marker.ref if marker else "external")
-        activities.append(
-            Activity(
-                date=iso_local(row.date),
-                activity_type="SELL",
-                currency=currency,
-                amount=amount,
-                source_ref=f"revolut-savings-sell:{ref}",
-                symbol=symbol,
-                instrument_type="EQUITY",
-                isin=isin,
-                quantity=amount,
-                unit_price=Decimal("1"),
-                comment=f"Revolut {currency}: venta [{ref[:16]}]",
+        if not cash_only:
+            activities.append(
+                Activity(
+                    date=iso_local(row.date),
+                    activity_type="SELL",
+                    currency=currency,
+                    amount=amount,
+                    source_ref=f"revolut-savings-sell:{ref}",
+                    symbol=symbol,
+                    instrument_type="EQUITY",
+                    isin=isin,
+                    quantity=amount,
+                    unit_price=Decimal("1"),
+                    comment=f"Revolut {currency}: venta [{ref[:16]}]",
+                )
             )
-        )
         activities.append(
             Activity(
                 date=iso_local(row.date + timedelta(seconds=1)),
