@@ -97,6 +97,22 @@ class WatchService:
             raise ValueError(f"Configuración inválida: {self.config_path}")
         return config
 
+    def apply_state_resets(self, config: dict) -> None:
+        """Reset one configured account exactly once per reset token."""
+        state = _load_json(self.state_path, {"accounts": {}})
+        accounts = state.setdefault("accounts", {})
+        applied = state.setdefault("resetTokens", {})
+        changed = False
+        for key, account in config["accounts"].items():
+            token = str(account.get("stateResetToken", "")).strip()
+            if token and applied.get(key) != token:
+                cleared = len(accounts.pop(key, []))
+                applied[key] = token
+                changed = True
+                print(f"Estado reiniciado para {key}: {cleared} identificador(es) eliminados.")
+        if changed:
+            _save_json(self.state_path, state)
+
     def files(self) -> list[Path]:
         if not self.inbox.exists():
             return []
@@ -214,6 +230,7 @@ class WatchService:
 
     def run_once(self) -> int:
         config = self.load_config()
+        self.apply_state_resets(config)
         failures = 0
         for path in self.files():
             try:

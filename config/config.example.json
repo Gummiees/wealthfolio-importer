@@ -21,6 +21,7 @@
       "isin": "IE000AZVL3K0",
       "wealthfolioAccountId": "",
       "externalTransfers": true,
+      "stateResetToken": "change-this-only-when-reimporting-the-account",
       "amountOverrides": {}
     },
     "revolut/savings-usd": {

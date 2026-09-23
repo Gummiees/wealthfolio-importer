@@ -292,6 +292,9 @@ USD y tracking mode `Transactions`. Los activos analizados son
 - Para cuentas de ahorro financiadas desde otra cuenta ya importada, activa
   `externalTransfers: true`: esas mismas entradas y salidas pasan a ser
   `TRANSFER_IN` y `TRANSFER_OUT`, para que Wealthfolio pueda vincularlas.
+- Para reconstruir una sola cuenta tras borrarla en Wealthfolio, define un
+  `stateResetToken` nuevo en esa cuenta. El servicio vacía sus identificadores
+  una vez y guarda el token; las siguientes ejecuciones no vuelven a resetearla.
 - Las fechas aceptan abreviaturas españolas e inglesas.
 - El parser trata explícitamente las abreviaturas ambiguas del TSV español:
   `4.5` en una operación externa representa 4.500. Para un entero pequeño sin
