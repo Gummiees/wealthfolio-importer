@@ -147,10 +147,7 @@ class WealthfolioMcpClient:
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
-            # Wealthfolio supports a regular JSON response. Request it
-            # explicitly: advertising SSE makes rmcp keep the connection
-            # available for server notifications after a completed tool call.
-            "Accept": "application/json",
+            "Accept": "application/json, text/event-stream",
         }
         if self.session_id:
             headers["mcp-session-id"] = self.session_id
@@ -182,9 +179,11 @@ class WealthfolioMcpClient:
                             message = json.loads(candidate)
                         except json.JSONDecodeError:
                             continue
-                        if message.get("id") == payload.get("id") and (
-                            "result" in message or "error" in message
-                        ):
+                        # rmcp returns the response as the only result event on
+                        # this per-request stream, but does not consistently
+                        # echo the JSON-RPC id.  A response is still
+                        # unambiguous because notifications have neither field.
+                        if "result" in message or "error" in message:
                             body = candidate
                             break
                     if not body and expect_json:
