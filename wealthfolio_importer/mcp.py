@@ -148,6 +148,10 @@ class WealthfolioMcpClient:
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
+            # Wealthfolio 3.8 keeps legacy MCP response streams open after a
+            # response. Closing each HTTP connection makes both JSON and SSE
+            # responses finite without affecting the MCP session header.
+            "Connection": "close",
         }
         if self.session_id:
             headers["mcp-session-id"] = self.session_id
