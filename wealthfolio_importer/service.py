@@ -107,6 +107,14 @@ class WatchService:
             token = str(account.get("stateResetToken", "")).strip()
             if token and applied.get(key) != token:
                 cleared = len(accounts.pop(key, []))
+                replay_name = str(account.get("replayProcessedFile", "")).strip()
+                if replay_name:
+                    source = self.processed / Path(*key.split("/")) / replay_name
+                    if not source.is_file():
+                        raise ValueError(f"No existe el histórico configurado para repetir: {source}")
+                    destination = _unique_path(self.inbox / Path(*key.split("/")), replay_name)
+                    shutil.copy2(source, destination)
+                    print(f"Histórico reencolado para {key}: {destination}")
                 applied[key] = token
                 changed = True
                 print(f"Estado reiniciado para {key}: {cleared} identificador(es) eliminados.")

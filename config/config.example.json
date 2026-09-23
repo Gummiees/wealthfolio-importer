@@ -22,6 +22,7 @@
       "wealthfolioAccountId": "",
       "externalTransfers": true,
       "stateResetToken": "change-this-only-when-reimporting-the-account",
+      "replayProcessedFile": "historical-export.tsv",
       "amountOverrides": {}
     },
     "revolut/savings-usd": {

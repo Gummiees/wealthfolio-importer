@@ -295,6 +295,8 @@ USD y tracking mode `Transactions`. Los activos analizados son
 - Para reconstruir una sola cuenta tras borrarla en Wealthfolio, define un
   `stateResetToken` nuevo en esa cuenta. El servicio vacía sus identificadores
   una vez y guarda el token; las siguientes ejecuciones no vuelven a resetearla.
+  `replayProcessedFile` puede indicar un archivo de la carpeta `processed` para
+  reencolarlo en ese mismo reinicio, útil cuando el histórico pertenece a root.
 - Las fechas aceptan abreviaturas españolas e inglesas.
 - El parser trata explícitamente las abreviaturas ambiguas del TSV español:
   `4.5` en una operación externa representa 4.500. Para un entero pequeño sin
