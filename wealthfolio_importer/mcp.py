@@ -147,7 +147,10 @@ class WealthfolioMcpClient:
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
+            # Wealthfolio supports a regular JSON response. Request it
+            # explicitly: advertising SSE makes rmcp keep the connection
+            # available for server notifications after a completed tool call.
+            "Accept": "application/json",
         }
         if self.session_id:
             headers["mcp-session-id"] = self.session_id
