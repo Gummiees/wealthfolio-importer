@@ -11,6 +11,8 @@ class _Response:
     def __init__(self, payload: dict | None, headers: dict | None = None):
         self.payload = payload
         self.headers = headers or {}
+        self._body = b"" if payload is None else json.dumps(payload).encode()
+        self._offset = 0
 
     def __enter__(self):
         return self
@@ -18,10 +20,12 @@ class _Response:
     def __exit__(self, *_args):
         return False
 
-    def read(self):
-        if self.payload is None:
-            return b""
-        return ("data: " + json.dumps(self.payload) + "\n\n").encode()
+    def read(self, amount: int | None = None):
+        if amount is None:
+            amount = len(self._body) - self._offset
+        chunk = self._body[self._offset : self._offset + amount]
+        self._offset += len(chunk)
+        return chunk
 
 
 class McpProtocolTests(unittest.TestCase):

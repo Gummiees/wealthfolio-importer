@@ -163,7 +163,24 @@ class WealthfolioMcpClient:
                     self.session_id = response.headers.get("mcp-session-id")
                 content_type = response.headers.get("Content-Type", "")
                 if "text/event-stream" not in content_type:
-                    body = response.read()
+                    # Streamable HTTP can return application/json on a
+                    # persistent connection.  Reading to EOF waits forever;
+                    # consume it until a complete JSON-RPC object is present.
+                    buffer = bytearray()
+                    body = b""
+                    while True:
+                        chunk = response.read(1)
+                        if not chunk:
+                            break
+                        buffer.extend(chunk)
+                        try:
+                            json.loads(buffer)
+                        except json.JSONDecodeError:
+                            continue
+                        body = bytes(buffer)
+                        break
+                    if not body and expect_json:
+                        raise McpError("La respuesta MCP terminó sin JSON-RPC")
                 else:
                     # Wealthfolio may keep an SSE response open after publishing
                     # the JSON-RPC result. Stop at this request's first result
