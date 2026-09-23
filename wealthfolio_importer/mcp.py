@@ -161,7 +161,31 @@ class WealthfolioMcpClient:
             with urlopen(request, timeout=self.timeout) as response:
                 if not self.session_id:
                     self.session_id = response.headers.get("mcp-session-id")
-                body = response.read()
+                content_type = response.headers.get("Content-Type", "")
+                if "text/event-stream" not in content_type:
+                    body = response.read()
+                else:
+                    # Wealthfolio may keep an SSE response open after publishing
+                    # the JSON-RPC result. Stop at this request's first result
+                    # instead of waiting for the stream to close.
+                    body = b""
+                    for raw_line in response:
+                        if not raw_line.startswith(b"data:"):
+                            continue
+                        candidate = raw_line[5:].strip()
+                        if not candidate:
+                            continue
+                        try:
+                            message = json.loads(candidate)
+                        except json.JSONDecodeError:
+                            continue
+                        if message.get("id") == payload.get("id") and (
+                            "result" in message or "error" in message
+                        ):
+                            body = candidate
+                            break
+                    if not body and expect_json:
+                        raise McpError("El stream MCP terminó sin respuesta JSON-RPC")
         except HTTPError as error:
             detail = error.read().decode("utf-8", errors="replace")
             raise McpError(f"Wealthfolio MCP respondió HTTP {error.code}: {detail[:500]}") from error
