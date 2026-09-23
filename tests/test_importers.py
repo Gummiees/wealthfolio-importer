@@ -306,6 +306,18 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual(row["quantity"], 0.5)
         self.assertEqual(row["fee"], 1.25)
 
+        local_timestamp = Activity(
+            date="2025-01-01T10:00:00",
+            activity_type="INTEREST",
+            currency="EUR",
+            amount=Decimal("1"),
+            source_ref="source-local-time",
+        )
+        self.assertEqual(
+            activity_to_mcp(local_timestamp, "account-1", 8)["date"],
+            "2025-01-01",
+        )
+
         unsafe = Activity(
             date=activity.date,
             activity_type="CREDIT",

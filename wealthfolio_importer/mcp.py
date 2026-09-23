@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,19 @@ from .model import Activity, decimal_text
 
 class McpError(RuntimeError):
     pass
+
+
+def _mcp_date(value: str) -> str:
+    """Keep source timestamps for local deduplication, but send valid MCP dates.
+
+    Wealthfolio accepts a date-only value or an RFC3339 timestamp. Several bank
+    exports provide a local timestamp with no offset; passing it through is
+    rejected by commit_activity_import even when its preview succeeds.
+    """
+    parsed = datetime.fromisoformat(value)
+    if "T" in value and parsed.tzinfo is None:
+        return parsed.date().isoformat()
+    return value
 
 
 def _json_number(value: Decimal | None) -> int | float | None:
@@ -36,7 +50,7 @@ def activity_to_mcp(activity: Activity, account_id: str, line_number: int) -> di
         )
 
     row: dict[str, Any] = {
-        "date": activity.date,
+        "date": _mcp_date(activity.date),
         "activityType": activity.activity_type,
         "currency": activity.currency,
         "accountId": account_id,
