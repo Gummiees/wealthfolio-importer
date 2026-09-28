@@ -14,3 +14,5 @@ state
 *.tsv
 *.xlsx
 *.xls
+*.html
+!wealthfolio_importer/web/templates/*.html
