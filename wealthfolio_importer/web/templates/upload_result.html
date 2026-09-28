@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Archivo en cola · Wealthfolio Importer</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+    <!-- Keep assets origin-relative: Traefik terminates HTTPS before this app. -->
+    <link rel="stylesheet" href="/static/app.css">
   </head>
   <body>
     <main class="card result">
