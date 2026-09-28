@@ -22,3 +22,6 @@ wealthfolio-importer = "wealthfolio_importer.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["wealthfolio_importer*"]
+
+[tool.setuptools.package-data]
+wealthfolio_importer = ["web/templates/*.html", "web/static/*.css", "web/static/*.js"]
