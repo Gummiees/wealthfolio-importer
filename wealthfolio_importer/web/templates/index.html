@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Wealthfolio Importer</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+    <script defer src="{{ url_for('static', path='app.js') }}"></script>
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <p class="eyebrow">WEALTHFOLIO IMPORTER</p>
+        <h1>Importa un extracto</h1>
+        <p class="intro">El archivo se valida y se deja en la bandeja de entrada para que el importador lo procese.</p>
+      </header>
+      {% if error %}
+      <p class="message error" role="alert">{{ error }}</p>
+      {% elif not accounts %}
+      <p class="message error" role="alert">No hay cuentas configuradas todavía.</p>
+      {% else %}
+      <form action="/upload" method="post" enctype="multipart/form-data" id="import-form">
+        <label for="provider">Entidad</label>
+        <input id="provider" type="search" list="providers" autocomplete="off" placeholder="Busca una entidad" required>
+        <datalist id="providers">
+          {% for provider in providers %}<option value="{{ provider|capitalize }}"></option>{% endfor %}
+          <option value="Fonditel" label="Próximamente"></option>
+        </datalist>
+        <p id="provider-note" class="hint">Fonditel aparecerá aquí cuando su conversor esté disponible.</p>
+        <section id="account-section" hidden>
+          <label for="account">Cuenta</label>
+          <input id="account" type="search" list="accounts" autocomplete="off" placeholder="Busca una cuenta" required>
+          <datalist id="accounts"></datalist>
+        </section>
+        <input id="account-key" name="account_key" type="hidden" required>
+        <label for="statement">Extracto</label>
+        <label class="dropzone" id="dropzone" for="statement">
+          <input id="statement" name="statement" type="file" required>
+          <span class="dropzone-title">Suelta el archivo aquí</span>
+          <span>o haz clic para seleccionarlo</span>
+          <small id="file-types">Selecciona primero una entidad y una cuenta.</small>
+        </label>
+        <p id="selected-file" class="hint" aria-live="polite"></p>
+        <button type="submit" id="submit" disabled>Enviar a importar</button>
+      </form>
+      <script id="account-data" type="application/json">{{ accounts | tojson }}</script>
+      {% endif %}
+    </main>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Archivo en cola · Wealthfolio Importer</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+  </head>
+  <body>
+    <main class="card result">
+      <p class="eyebrow">ARCHIVO EN COLA</p>
+      <h1>Listo para importar</h1>
+      <p><strong>{{ filename }}</strong> se ha añadido a <code>{{ account_key }}</code>.</p>
+      <p class="intro">El watcher lo procesará en su siguiente revisión. Consulta sus registros si el archivo termina en <code>failed</code>.</p>
+      <a class="button" href="/">Importar otro archivo</a>
+    </main>
+  </body>
+</html>
