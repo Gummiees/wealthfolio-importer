@@ -40,7 +40,7 @@ services:
       - /volume1/finance/wealthfolio-importer/data/inbox:/inbox
 
     ports:
-      - "8000:8000"
+      - "8002:8000"
 
     networks:
       - traefik_proxy

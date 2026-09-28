@@ -213,7 +213,8 @@ etiqueta por commit cuando se hace push a `main` o a una etiqueta `v*`.
 
 El mismo repositorio incluye una interfaz web ligera para cargar extractos. El
 servicio `wealthfolio-importer-web` usa la misma imagen, lee las cuentas desde
-`config.json` y publica el puerto `8000`. Abre `http://<IP-del-NAS>:8000`.
+`config.json` y publica el puerto `8002` en el NAS. Abre
+`http://<IP-del-NAS>:8002`.
 
 La página permite buscar la entidad y la cuenta, muestra solo las extensiones
 aceptadas por su parser y coloca el archivo validado en la carpeta `inbox`
