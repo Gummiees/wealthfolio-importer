@@ -39,11 +39,18 @@ services:
       - /volume1/finance/wealthfolio-importer/config/config.json:/app/config.json:ro
       - /volume1/finance/wealthfolio-importer/data/inbox:/inbox
 
-    ports:
-      - "8002:8000"
-
     networks:
       - traefik_proxy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_proxy"
+      - "traefik.http.routers.wealthfolio-importer.rule=Host(`importer.gummiees.party`)"
+      - "traefik.http.routers.wealthfolio-importer.entrypoints=websecure"
+      - "traefik.http.routers.wealthfolio-importer.tls=true"
+      - "traefik.http.routers.wealthfolio-importer.tls.certresolver=cloudflare"
+      - "traefik.http.routers.wealthfolio-importer.service=wealthfolio-importer-web"
+      - "traefik.http.services.wealthfolio-importer-web.loadbalancer.server.port=8000"
 
 networks:
   traefik_proxy:
