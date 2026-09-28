@@ -22,3 +22,20 @@ services:
       - ./data/processed:/processed
       - ./data/failed:/failed
       - ./data/state:/state
+
+  wealthfolio-importer-web:
+    build: .
+    container_name: wealthfolio-importer-web
+    restart: unless-stopped
+    command: ["uvicorn", "wealthfolio_importer.web.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+    environment:
+      CONFIG_PATH: "/app/config.json"
+      INBOX_DIR: "/inbox"
+
+    volumes:
+      - ./config/config.json:/app/config.json:ro
+      - ./data/inbox:/inbox
+
+    ports:
+      - "8000:8000"

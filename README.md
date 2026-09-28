@@ -209,6 +209,18 @@ allí `config/config.json`, pegar el stack en Portainer. El despliegue activo us
 La acción de GitHub incluida publica `latest`, la etiqueta de versión y una
 etiqueta por commit cuando se hace push a `main` o a una etiqueta `v*`.
 
+## Interfaz web
+
+El mismo repositorio incluye una interfaz web ligera para cargar extractos. El
+servicio `wealthfolio-importer-web` usa la misma imagen, lee las cuentas desde
+`config.json` y publica el puerto `8000`. Abre `http://<IP-del-NAS>:8000`.
+
+La página permite buscar la entidad y la cuenta, muestra solo las extensiones
+aceptadas por su parser y coloca el archivo validado en la carpeta `inbox`
+correspondiente. El watcher existente conserva el control de conversión,
+deduplicación, CSV y/o importación MCP. Fonditel se muestra como próxima fuente
+hasta que cuente con parser.
+
 ## Formato de salida
 
 Todos los conversores escriben la misma cabecera:

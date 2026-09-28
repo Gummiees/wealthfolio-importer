@@ -124,7 +124,13 @@ class WatchService:
     def files(self) -> list[Path]:
         if not self.inbox.exists():
             return []
-        return sorted(path for path in self.inbox.rglob("*") if path.is_file())
+        # The web interface streams uploads to an adjacent temporary file and
+        # atomically renames it when complete. Never parse that incomplete file.
+        return sorted(
+            path
+            for path in self.inbox.rglob("*")
+            if path.is_file() and not path.name.endswith(".uploading")
+        )
 
     def account(self, path: Path, config: dict) -> tuple[str, dict, Path]:
         relative = path.relative_to(self.inbox)

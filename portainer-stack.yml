@@ -25,6 +25,26 @@ services:
     networks:
       - traefik_proxy
 
+  wealthfolio-importer-web:
+    image: ghcr.io/gummiees/wealthfolio-importer:latest
+    container_name: wealthfolio-importer-web
+    restart: unless-stopped
+    command: ["uvicorn", "wealthfolio_importer.web.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+    environment:
+      CONFIG_PATH: "/app/config.json"
+      INBOX_DIR: "/inbox"
+
+    volumes:
+      - /volume1/finance/wealthfolio-importer/config/config.json:/app/config.json:ro
+      - /volume1/finance/wealthfolio-importer/data/inbox:/inbox
+
+    ports:
+      - "8000:8000"
+
+    networks:
+      - traefik_proxy
+
 networks:
   traefik_proxy:
     external: true
