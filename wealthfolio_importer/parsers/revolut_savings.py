@@ -410,8 +410,13 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
         )
         for a in activities
     )
-    if cash < Decimal("-0.01"):
-        raise ValueError(f"El efectivo reconstruido es negativo: {cash}")
+    required_opening_cash = max(Decimal("0"), -cash)
+    if required_opening_cash:
+        warnings.append(
+            "El extracto requiere un saldo previo de al menos "
+            f"{required_opening_cash} {currency}; se conserva como efectivo "
+            "histórico en Wealthfolio y no se crea un depósito artificial."
+        )
 
     counts: dict[str, int] = defaultdict(int)
     for activity in activities:
@@ -427,6 +432,7 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
             "netQuantityChange": str(position),
             "requiredOpeningQuantity": str(required_opening_quantity),
             "endingCash": str(cash),
+            "requiredOpeningCash": str(required_opening_cash),
         },
         warnings=warnings,
     ).sorted()

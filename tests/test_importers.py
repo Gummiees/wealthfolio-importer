@@ -286,6 +286,18 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual(result.checks["netQuantityChange"], "-100")
         self.assertTrue(result.warnings)
 
+    def test_revolut_savings_cash_only_allows_historical_cash(self):
+        path = self.write(
+            "incremental-cash-savings.tsv",
+            "Date\tDescription\tValue, EUR\tPrice per share\tQuantity of shares\n"
+            "2 ene 2025, 03:00:00\tReturn PAID EUR Class R TEST\t1,000\t\t\n"
+            "2 ene 2025, 03:00:00\tService Fee Charged EUR Class TEST\t-0,100\t\t\n"
+            "2 ene 2025, 12:00:00\tSELL EUR Class R TEST\t-100\t1\t100\n",
+        )
+        result = parse_revolut_savings(path, {"currency": "EUR", "cashOnly": True})
+        self.assertEqual(result.checks["requiredOpeningCash"], "99.91")
+        self.assertTrue(result.warnings)
+
     def test_sabadell_distinguishes_same_day_equal_charges_for_mcp(self):
         path = self.write(
             "same-day.txt",

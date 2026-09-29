@@ -337,8 +337,8 @@ USD y tracking mode `Transactions`. Los activos analizados son
 - Las reinversiones y rendimientos conservan su escala propia.
 - Se comprueba el efectivo resultante. Si un extracto incremental vende
   participaciones adquiridas antes de su intervalo, el preview indica la
-  posición histórica mínima requerida y conserva esas participaciones en
-  Wealthfolio; no crea una compra artificial.
+  posición y el efectivo históricos mínimos requeridos, y los conserva en
+  Wealthfolio; no crea compras ni depósitos artificiales.
 
 ## Reglas de XTB
 
