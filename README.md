@@ -335,8 +335,10 @@ USD y tracking mode `Transactions`. Los activos analizados son
   detiene. La cuenta puede resolver el caso con `amountOverrides`, usando una
   clave como `2024-10-07T12:36:03|BUY` y el importe correcto como valor.
 - Las reinversiones y rendimientos conservan su escala propia.
-- Se comprueban el efectivo y las participaciones finales; una posición o un
-  efectivo negativos detienen la conversión.
+- Se comprueba el efectivo resultante. Si un extracto incremental vende
+  participaciones adquiridas antes de su intervalo, el preview indica la
+  posición histórica mínima requerida y conserva esas participaciones en
+  Wealthfolio; no crea una compra artificial.
 
 ## Reglas de XTB
 

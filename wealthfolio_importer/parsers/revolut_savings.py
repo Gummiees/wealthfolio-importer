@@ -84,10 +84,11 @@ def _resolve_external_trade_amounts(
     reinvested_by_buy: dict[int, SavingsRow],
     daily_net: dict[datetime, Decimal],
     overrides: dict[str, str],
-) -> tuple[dict[int, Decimal], list[str]]:
+) -> tuple[dict[int, Decimal], list[str], Decimal]:
     resolved: dict[int, Decimal] = {}
     warnings: list[str] = []
     position = Decimal("0")
+    minimum_position = Decimal("0")
 
     def nearby(date: datetime, before: bool) -> Decimal | None:
         values = [
@@ -149,12 +150,8 @@ def _resolve_external_trade_amounts(
                 )
         resolved[row.line] = amount
         position += direction * amount
-        if position < 0:
-            raise ValueError(
-                f"Línea {row.line}: la posición reconstruida es negativa "
-                f"después de aplicar {direction * amount}; saldo={position}"
-            )
-    return resolved, warnings
+        minimum_position = min(minimum_position, position)
+    return resolved, warnings, -minimum_position
 
 
 def _find_match(
@@ -281,7 +278,7 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
     daily_net: dict[datetime, Decimal] = defaultdict(Decimal)
     for row in by_kind["Return PAID"] + by_kind["Service Fee Charged"]:
         daily_net[row.date] += row.value
-    trade_amounts, scale_warnings = _resolve_external_trade_amounts(
+    trade_amounts, scale_warnings, required_opening_quantity = _resolve_external_trade_amounts(
         by_kind["BUY"],
         by_kind["SELL"],
         reinvested_by_buy,
@@ -289,6 +286,12 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
         config.get("amountOverrides", {}),
     )
     warnings.extend(scale_warnings)
+    if required_opening_quantity:
+        warnings.append(
+            "El extracto comienza con una posición previa de al menos "
+            f"{required_opening_quantity}; se conserva como saldo histórico "
+            "en Wealthfolio y no se crea una compra artificial."
+        )
 
     daily: dict[datetime, dict[str, SavingsRow]] = defaultdict(dict)
     for row in by_kind["Return PAID"] + by_kind["Service Fee Charged"]:
@@ -407,8 +410,6 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
         )
         for a in activities
     )
-    if position < 0:
-        raise ValueError(f"La posición reconstruida es negativa: {position}")
     if cash < Decimal("-0.01"):
         raise ValueError(f"El efectivo reconstruido es negativo: {cash}")
 
@@ -420,7 +421,11 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
         checks={
             "sourceRows": len(rows),
             "activityCounts": dict(counts),
+            # Kept for existing consumers. This is the change represented by
+            # this export; the actual account position may include history.
             "endingQuantity": str(position),
+            "netQuantityChange": str(position),
+            "requiredOpeningQuantity": str(required_opening_quantity),
             "endingCash": str(cash),
         },
         warnings=warnings,

@@ -266,7 +266,7 @@ def parse_sabadell_card(path: Path, config: dict) -> ConversionResult:
         date = f"{year}-{month}-{day}"
         datetime.fromisoformat(date)
         statement_amount = parse_european_decimal(
-            re.sub(r"\s*EUR\s*$", "", amount_raw, flags=re.IGNORECASE),
+            re.sub(r"\s*EUR\s*(?:\(\d+\))?\s*$", "", amount_raw, flags=re.IGNORECASE),
             f"Línea {line_number}: importe",
         )
         if statement_amount == 0:

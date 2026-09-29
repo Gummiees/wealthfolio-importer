@@ -265,6 +265,27 @@ class ImporterTests(unittest.TestCase):
             [("WITHDRAWAL", Decimal("302.00")), ("CREDIT", Decimal("19.56"))],
         )
 
+    def test_sabadell_card_ignores_trailing_currency_footnotes(self):
+        path = self.write(
+            "29092026_card.txt",
+            "28/09|DIA RETAIL ESPANA PALM|CA SES BIELAS|14,18EUR(2)\n",
+        )
+        result = parse_sabadell_card(path, {"currency": "EUR"})
+        self.assertEqual(result.activities[0].amount, Decimal("14.18"))
+
+    def test_revolut_savings_allows_sales_of_a_historical_position(self):
+        path = self.write(
+            "incremental-savings.tsv",
+            "Date\tDescription\tValue, EUR\tPrice per share\tQuantity of shares\n"
+            "2 ene 2025, 03:00:00\tReturn PAID EUR Class R TEST\t1,000\t\t\n"
+            "2 ene 2025, 03:00:00\tService Fee Charged EUR Class TEST\t-0,100\t\t\n"
+            "2 ene 2025, 12:00:00\tSELL EUR Class R TEST\t-100\t1\t100\n",
+        )
+        result = parse_revolut_savings(path, {"currency": "EUR"})
+        self.assertEqual(result.checks["requiredOpeningQuantity"], "100")
+        self.assertEqual(result.checks["netQuantityChange"], "-100")
+        self.assertTrue(result.warnings)
+
     def test_sabadell_distinguishes_same_day_equal_charges_for_mcp(self):
         path = self.write(
             "same-day.txt",
