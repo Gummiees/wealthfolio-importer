@@ -27,7 +27,7 @@ CASH_HEADER = [
 ]
 
 TRADE_PATTERN = re.compile(
-    r"(?:OPEN|CLOSE)\s+(?:BUY|SELL)\s+([0-9.]+)(?:/[0-9.]+)?\s+@\s+([0-9.]+)",
+    r"(?:OPEN|CLOSE)\s+(?:BUY|SELL)\s+(?:\S+\s+)?([0-9.]+)(?:/[0-9.]+)?\s+@\s+([0-9.]+)",
     re.IGNORECASE,
 )
 

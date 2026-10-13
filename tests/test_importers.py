@@ -19,6 +19,7 @@ from wealthfolio_importer.parsers import (
     parse_sabadell_card,
     parse_xtb,
 )
+from wealthfolio_importer.parsers.xtb import TRADE_PATTERN
 from wealthfolio_importer.mcp import McpError, McpImportResult, activity_to_mcp
 from wealthfolio_importer.model import Activity
 from wealthfolio_importer.service import WatchService
@@ -217,6 +218,16 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual([a.activity_type for a in result.activities], ["DEPOSIT", "BUY", "INTEREST"])
         self.assertEqual(result.checks["endingCash"], "21")
         self.assertEqual(result.checks["ignoredSubaccountTransfers"], 2)
+
+    def test_xtb_trade_comment_allows_current_ticker_format(self):
+        self.assertEqual(
+            TRADE_PATTERN.fullmatch("OPEN BUY IS3N.DE 2/2.0453 @ 48.417").groups(),
+            ("2", "48.417"),
+        )
+        self.assertEqual(
+            TRADE_PATTERN.fullmatch("OPEN BUY 2/2.0453 @ 48.417").groups(),
+            ("2", "48.417"),
+        )
 
     def test_sabadell_reconciles_opening_balance_and_mirrors_transfer(self):
         path = self.write(
