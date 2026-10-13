@@ -9,6 +9,18 @@
         {"pattern": "(?:desde|a|from|to) EUR Ahorro", "targetAccount": "revolut/savings-eur", "mirror": true}
       ]
     },
+    "revolut/current-huf": {
+      "parser": "revolut-current",
+      "currency": "HUF",
+      "wealthfolioAccountId": "",
+      "includeOpeningBalance": true
+    },
+    "revolut/current-cny": {
+      "parser": "revolut-current",
+      "currency": "CNY",
+      "wealthfolioAccountId": "",
+      "includeOpeningBalance": true
+    },
     "revolut/stocks": {
       "parser": "revolut-stocks",
       "currency": "USD",

@@ -117,6 +117,19 @@ class ImporterTests(unittest.TestCase):
         )
         self.assertTrue(result.warnings)
 
+    def test_revolut_current_maps_spanish_atm_withdrawals(self):
+        path = self.write(
+            "account-huf.tsv",
+            "Tipo\tProducto\tFecha de inicio\tFecha de finalización\tDescripción\t"
+            "Importe\tComisión\tDivisa\tState\tSaldo\n"
+            "Cajero\tActual\t2026-10-04 13:57:11\t2026-10-05 13:50:18\t"
+            "Retirada de efectivo en Otp\t-26999\t0\tHUF\tCOMPLETADO\t250275.24\n",
+        )
+        result = parse_revolut_current(path, {"currency": "HUF"})
+        self.assertEqual(result.checks["openingBalance"], "277274.24")
+        self.assertEqual([activity.activity_type for activity in result.activities], ["DEPOSIT", "WITHDRAWAL"])
+        self.assertEqual(result.activities[-1].amount, Decimal("26999"))
+
     def test_revolut_savings_reconciles_interest_reinvestment_and_withdrawal(self):
         path = self.write(
             "savings.tsv",

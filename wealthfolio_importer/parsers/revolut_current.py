@@ -16,6 +16,7 @@ _EXCHANGE_TYPES = {"cambio", "exchange"}
 _PAYMENT_TYPES = {
     "pago con tarjeta",
     "pago de revolut",
+    "cajero",
     "card payment",
     "cash withdrawal",
     "retirada de efectivo",

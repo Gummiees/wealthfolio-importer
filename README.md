@@ -89,6 +89,8 @@ La ruta de entrada identifica la configuración de la cuenta:
 data/inbox/
 ├── revolut/
 │   ├── current-eur/
+│   ├── current-huf/
+│   ├── current-cny/
 │   ├── stocks/
 │   ├── savings-eur/
 │   └── savings-usd/
@@ -283,8 +285,12 @@ una fecha `DDMMYYYY`, de la que se obtiene el año.
 
 ## Reglas de Revolut cuenta corriente
 
-El extracto se obtiene en Revolut como TSV de la cuenta corriente. Para la
-cuenta EUR se deposita directamente en `inbox/revolut/current-eur/`.
+El extracto se obtiene en Revolut como TSV de la cuenta corriente. Cada saldo
+de divisa debe tener su propia cuenta de efectivo de Wealthfolio y su propio
+directorio de entrada: `current-eur`, `current-huf` y `current-cny` son las
+configuraciones incluidas. Para añadir otra divisa, duplicar una entrada
+`revolut-current`, usar su código ISO 4217 y crear el directorio con la misma
+clave.
 
 - Solo se importan filas con estado `COMPLETADO`/`COMPLETED`; las pendientes o
   rechazadas se omiten y se muestran en los avisos del preview.
