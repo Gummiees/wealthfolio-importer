@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import xlrd
+
 from ..model import Activity, ConversionResult
 from ..utils import parse_european_decimal, source_hash
 
@@ -177,7 +179,7 @@ def parse_sabadell(path: Path, config: dict) -> ConversionResult:
             ),
         )
         activities.append(activity)
-        counts[activity_type] = counts.get(activity_type, 0) + 1
+        counts[activity.activity_type] = counts.get(activity.activity_type, 0) + 1
 
         if transfer and transfer.get("mirror", False):
             target = str(transfer.get("targetAccount", "")).strip()
@@ -249,7 +251,100 @@ def _card_year(path: Path) -> str:
     return match.group(3)
 
 
+def _sabadell_card_activity(
+    *,
+    date_raw: str,
+    concept: str,
+    locality: str,
+    amount_raw: str,
+    year: str,
+    currency: str,
+    source: str,
+) -> Activity:
+    day, month = date_raw.split("/")
+    date = f"{year}-{month}-{day}"
+    datetime.fromisoformat(date)
+    statement_amount = parse_european_decimal(
+        re.sub(r"\s*EUR\s*(?:\(\d+\))?\s*$", "", amount_raw, flags=re.IGNORECASE),
+        f"{source}: importe",
+    )
+    if statement_amount == 0:
+        raise ValueError(f"{source}: el importe no puede ser cero")
+
+    # En el extracto Sabadell, un importe positivo es una compra y uno
+    # negativo es una devolución. La cuenta de crédito usa el signo de caja.
+    cash_amount = -statement_amount
+    activity_type = "WITHDRAWAL" if cash_amount < 0 else "CREDIT"
+    ref = source_hash(date, concept, locality, statement_amount)
+    return Activity(
+        date=date,
+        activity_type=activity_type,
+        currency=currency,
+        amount=abs(cash_amount),
+        source_ref=f"sabadell-card:{ref}",
+        comment=" | ".join(
+            part for part in (f"Sabadell tarjeta: {concept}", locality) if part
+        ),
+    )
+
+
+def _parse_sabadell_card_xls(path: Path, config: dict) -> ConversionResult:
+    currency = config.get("currency", "EUR").upper()
+    year = _card_year(path)
+    try:
+        sheet = xlrd.open_workbook(path).sheet_by_index(0)
+    except xlrd.XLRDError as error:
+        raise ValueError(f"No se pudo abrir el Excel de tarjeta Sabadell: {path.name}") from error
+
+    header_row: int | None = None
+    for row_number in range(sheet.nrows):
+        values = [str(value).strip() for value in sheet.row_values(row_number)]
+        if values[:4] == ["FECHA", "CONCEPTO", "LOCALIDAD", "IMPORTE"]:
+            header_row = row_number
+            break
+    if header_row is None:
+        raise ValueError(
+            "El Excel de tarjeta Sabadell no contiene la tabla de operaciones liquidadas"
+        )
+
+    activities: list[Activity] = []
+    counts: dict[str, int] = {}
+    for row_number in range(header_row + 1, sheet.nrows):
+        values = [str(value).strip() for value in sheet.row_values(row_number)]
+        if len(values) < 4 or not re.fullmatch(r"\d{2}/\d{2}", values[0]):
+            continue
+        amount_raw = next(
+            (
+                value
+                for value in values[3:]
+                if re.fullmatch(r"-?[0-9][0-9.,]*", value)
+            ),
+            "",
+        )
+        activity = _sabadell_card_activity(
+            date_raw=values[0],
+            concept=values[1],
+            locality=values[2],
+            amount_raw=amount_raw,
+            year=year,
+            currency=currency,
+            source=f"Fila {row_number + 1}",
+        )
+        activities.append(activity)
+        counts[activity.activity_type] = counts.get(activity.activity_type, 0) + 1
+
+    if not activities:
+        raise ValueError("El Excel de tarjeta Sabadell no contiene transacciones liquidadas")
+    return ConversionResult(
+        activities=activities,
+        checks={"sourceRows": len(activities), "activityCounts": counts},
+    ).sorted()
+
+
 def parse_sabadell_card(path: Path, config: dict) -> ConversionResult:
+    if path.suffix.lower() == ".xls":
+        return _parse_sabadell_card_xls(path, config)
+
     currency = config.get("currency", "EUR").upper()
     year = _card_year(path)
     activities: list[Activity] = []
@@ -262,33 +357,17 @@ def parse_sabadell_card(path: Path, config: dict) -> ConversionResult:
             continue
         source_rows += 1
         date_raw, concept, locality, amount_raw = columns
-        day, month = date_raw.split("/")
-        date = f"{year}-{month}-{day}"
-        datetime.fromisoformat(date)
-        statement_amount = parse_european_decimal(
-            re.sub(r"\s*EUR\s*(?:\(\d+\))?\s*$", "", amount_raw, flags=re.IGNORECASE),
-            f"Línea {line_number}: importe",
-        )
-        if statement_amount == 0:
-            raise ValueError(f"Línea {line_number}: el importe no puede ser cero")
-
-        # En el extracto Sabadell, un importe positivo es una compra y uno
-        # negativo es una devolución. La cuenta de crédito usa el signo de caja.
-        cash_amount = -statement_amount
-        activity_type = "WITHDRAWAL" if cash_amount < 0 else "CREDIT"
-        ref = source_hash(date, concept, locality, statement_amount)
-        activity = Activity(
-            date=date,
-            activity_type=activity_type,
+        activity = _sabadell_card_activity(
+            date_raw=date_raw,
+            concept=concept,
+            locality=locality,
+            amount_raw=amount_raw,
+            year=year,
             currency=currency,
-            amount=abs(cash_amount),
-            source_ref=f"sabadell-card:{ref}",
-            comment=" | ".join(
-                part for part in (f"Sabadell tarjeta: {concept}", locality) if part
-            ),
+            source=f"Línea {line_number}",
         )
         activities.append(activity)
-        counts[activity_type] = counts.get(activity_type, 0) + 1
+        counts[activity.activity_type] = counts.get(activity.activity_type, 0) + 1
 
     if not activities:
         raise ValueError("El TXT de tarjeta Sabadell no contiene transacciones")

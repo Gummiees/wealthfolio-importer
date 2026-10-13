@@ -15,7 +15,7 @@ La primera versión soporta:
 | Revolut Flexible Cash Funds USD | `savings-statement_*.tsv` | La misma conversión en USD |
 | XTB | Exportación completa `.xlsx` | Acciones/ETF, efectivo, intereses, impuestos y resultado neto de CFD |
 | Sabadell cuentas | Histórico de movimientos `.txt` | Saldo inicial, ingresos, gastos, intereses y traspasos |
-| Sabadell tarjeta | Extracto de tarjeta `.txt` | Compras y devoluciones |
+| Sabadell tarjeta | Extracto de tarjeta `.txt` o búsqueda por fechas `.xls` | Compras y devoluciones |
 
 Fonditel está documentado como siguiente fuente, pero todavía no genera CSV.
 
@@ -241,9 +241,11 @@ Wealthfolio al reimportar un CSV.
 
 Las cuentas principal y de ahorros usan el TXT de siete columnas que exporta
 Sabadell: fecha de operación, concepto, fecha valor, importe, saldo, NIF y
-referencia. La tarjeta usa el TXT del extracto, con filas de fecha `DD/MM`,
-concepto, localidad e importe. El nombre del fichero de tarjeta debe contener
-una fecha `DDMMYYYY`, de la que se obtiene el año.
+referencia. La tarjeta acepta el TXT del extracto o el Excel `.xls` de búsqueda
+por fechas, con filas de fecha `DD/MM`, concepto, localidad e importe. En el
+Excel se ignoran los movimientos pendientes y las líneas auxiliares de cambio
+de divisa. El nombre del fichero de tarjeta debe contener una fecha
+`DDMMYYYY`, de la que se obtiene el año.
 
 - En el primer extracto de una cuenta, el parser calcula el saldo inicial a
   partir del movimiento más antiguo y su saldo resultante. Esa actividad tiene

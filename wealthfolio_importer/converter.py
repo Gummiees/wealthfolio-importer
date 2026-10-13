@@ -28,7 +28,7 @@ EXTENSIONS = {
     "revolut-savings": {".tsv"},
     "revolut-current": {".tsv"},
     "sabadell": {".txt", ".csv"},
-    "sabadell-card": {".txt"},
+    "sabadell-card": {".txt", ".xls"},
     "xtb": {".xlsx"},
 }
 

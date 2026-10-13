@@ -131,6 +131,36 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual([activity.activity_type for activity in result.activities], ["DEPOSIT", "WITHDRAWAL"])
         self.assertEqual(result.activities[-1].amount, Decimal("26999"))
 
+    def test_sabadell_card_parses_date_search_xls(self):
+        path = self.root / "13102026 4106________8015.xls"
+        path.touch()
+        rows = [
+            ["MOVIMIENTOS DE CREDITO", "", "", "", "", ""],
+            ["FECHA", "CONCEPTO", "LOCALIDAD", "SIT. MOV.", "IMPORTE", ""],
+            ["09/10", "Pendiente", "Palma", "AUT", "108,08", "EUR"],
+            ["FECHA", "CONCEPTO", "LOCALIDAD", "IMPORTE", "", ""],
+            ["11/10", "Panaderia", "Palma", "", "3,08", "EUR"],
+            ["07/10", "Devolucion", "Madrid", "", "-1,50", "EUR"],
+            ["", "Importe original: 1.500 HUF", "Madrid", "", "", ""],
+            ["", "", "TOTAL OPERACIONES", "1,58", "EUR", ""],
+        ]
+        sheet = mock.Mock(nrows=len(rows))
+        sheet.row_values.side_effect = lambda index: rows[index]
+        workbook = mock.Mock()
+        workbook.sheet_by_index.return_value = sheet
+        with mock.patch(
+            "wealthfolio_importer.parsers.sabadell.xlrd.open_workbook",
+            return_value=workbook,
+        ):
+            result = parse_sabadell_card(path, {"currency": "EUR"})
+
+        self.assertEqual(result.checks["sourceRows"], 2)
+        self.assertEqual(
+            [(activity.activity_type, activity.amount) for activity in result.activities],
+            [("CREDIT", Decimal("1.50")), ("WITHDRAWAL", Decimal("3.08"))],
+        )
+        self.assertIn("Panaderia", result.activities[-1].comment)
+
     def test_revolut_savings_reconciles_interest_reinvestment_and_withdrawal(self):
         path = self.write(
             "savings.tsv",
