@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+import unicodedata
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -80,9 +81,88 @@ def _cash_type(amount: Decimal, concept: str, transfer: dict | None) -> str:
     return "DEPOSIT" if amount > 0 else "WITHDRAWAL"
 
 
+def _normalise_excel_header(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(character for character in text if not unicodedata.combining(character))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _excel_value(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (datetime, date)):
+        return value.strftime("%d/%m/%Y")
+    return str(value).strip()
+
+
+def _header_index(headers: list[str], aliases: set[str]) -> int | None:
+    return next((index for index, header in enumerate(headers) if header in aliases), None)
+
+
+def _sabadell_xlsx_lines(path: Path) -> list[str]:
+    try:
+        workbook = load_workbook(path, read_only=True, data_only=True)
+        try:
+            rows = [list(row) for row in workbook.active.iter_rows(values_only=True)]
+        finally:
+            workbook.close()
+    except Exception as error:
+        raise ValueError(f"No se pudo abrir el Excel de Sabadell: {path.name}") from error
+
+    for header_row, row in enumerate(rows):
+        headers = [_normalise_excel_header(value) for value in row]
+        operation_index = _header_index(
+            headers, {"f operativa", "f operacion", "fecha operativa", "fecha operacion"}
+        )
+        concept_index = _header_index(headers, {"concepto"})
+        value_index = _header_index(headers, {"f valor", "fecha valor"})
+        amount_index = _header_index(headers, {"importe"})
+        balance_index = _header_index(headers, {"saldo"})
+        if None not in {
+            operation_index,
+            concept_index,
+            value_index,
+            amount_index,
+            balance_index,
+        }:
+            break
+    else:
+        raise ValueError(
+            "El Excel de Sabadell no contiene las columnas F. Operativa, Concepto, "
+            "F. Valor, Importe y Saldo"
+        )
+
+    nif_index = _header_index(headers, {"nif"})
+    reference_indexes = [
+        index for index, header in enumerate(headers) if header.startswith("referencia")
+    ]
+    lines: list[str] = []
+    for row in rows[header_row + 1 :]:
+        values = [_excel_value(value) for value in row]
+        operation = values[operation_index] if operation_index < len(values) else ""
+        if not re.fullmatch(r"\d{2}/\d{2}/\d{4}", operation):
+            continue
+        concept = values[concept_index] if concept_index < len(values) else ""
+        value_date = values[value_index] if value_index < len(values) else ""
+        amount = values[amount_index] if amount_index < len(values) else ""
+        balance = values[balance_index] if balance_index < len(values) else ""
+        nif = values[nif_index] if nif_index is not None and nif_index < len(values) else ""
+        reference = " / ".join(
+            values[index] for index in reference_indexes if index < len(values) and values[index]
+        )
+        lines.append("|".join((operation, concept, value_date, amount, balance, nif, reference)))
+
+    if not lines:
+        raise ValueError("El Excel de Sabadell no contiene transacciones")
+    return lines
+
+
 def parse_sabadell(path: Path, config: dict) -> ConversionResult:
     currency = config.get("currency", "EUR").upper()
-    lines = [line.strip() for line in _read_text(path).splitlines() if line.strip()]
+    if path.suffix.lower() == ".xlsx":
+        lines = _sabadell_xlsx_lines(path)
+    else:
+        lines = [line.strip() for line in _read_text(path).splitlines() if line.strip()]
     if not lines:
         raise ValueError("El TXT de Sabadell no contiene transacciones")
 

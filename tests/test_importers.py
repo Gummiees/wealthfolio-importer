@@ -180,6 +180,26 @@ class ImporterTests(unittest.TestCase):
             [("CREDIT", Decimal("1.50")), ("WITHDRAWAL", Decimal("3.08"))],
         )
 
+    def test_sabadell_account_parses_xlsx_export(self):
+        path = self.root / "sabadell-main.xlsx"
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Consulta de movimientos", "", "", "", "", "", ""])
+        sheet.append(["F. Operativa", "Concepto", "F. Valor", "Importe", "Saldo", "Referencia 1", "Referencia 2"])
+        sheet.append([datetime(2026, 1, 2), "NOMINA", datetime(2026, 1, 2), 1000, 1500, "PAY-1", ""])
+        sheet.append([datetime(2026, 1, 3), "SUPERMERCADO", datetime(2026, 1, 3), -25.5, 1474.5, "SHOP-1", ""])
+        workbook.save(path)
+
+        result = parse_sabadell(path, {"currency": "EUR"})
+
+        self.assertEqual(result.checks["sourceRows"], 2)
+        self.assertEqual(result.checks["statementBalance"], "1474.5")
+        self.assertEqual(
+            [activity.activity_type for activity in result.activities],
+            ["DEPOSIT", "DEPOSIT", "WITHDRAWAL"],
+        )
+        self.assertIn("ref PAY-1", result.activities[1].comment)
+
     def test_revolut_savings_reconciles_interest_reinvestment_and_withdrawal(self):
         path = self.write(
             "savings.tsv",
