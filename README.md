@@ -241,7 +241,7 @@ Wealthfolio al reimportar un CSV.
 
 Las cuentas principal y de ahorros usan el TXT de siete columnas que exporta
 Sabadell: fecha de operación, concepto, fecha valor, importe, saldo, NIF y
-referencia. La tarjeta acepta el TXT del extracto o el Excel `.xls` de búsqueda
+referencia. La tarjeta acepta el TXT del extracto o el Excel `.xls`/`.xlsx` de búsqueda
 por fechas, con filas de fecha `DD/MM`, concepto, localidad e importe. En el
 Excel se ignoran los movimientos pendientes y las líneas auxiliares de cambio
 de divisa. El nombre del fichero de tarjeta debe contener una fecha

@@ -161,6 +161,25 @@ class ImporterTests(unittest.TestCase):
         )
         self.assertIn("Panaderia", result.activities[-1].comment)
 
+    def test_sabadell_card_parses_date_search_xlsx(self):
+        path = self.root / "13102026 4106________8015.xlsx"
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["MOVIMIENTOS DE CREDITO", "", "", "", "", ""])
+        sheet.append(["FECHA", "CONCEPTO", "LOCALIDAD", "IMPORTE", "", ""])
+        sheet.append(["11/10", "Panaderia", "Palma", "3,08", "EUR", ""])
+        sheet.append(["07/10", "Devolucion", "Madrid", "-1,50", "EUR", ""])
+        sheet.append(["", "Importe original: 1.500 HUF", "Madrid", "", "", ""])
+        workbook.save(path)
+
+        result = parse_sabadell_card(path, {"currency": "EUR"})
+
+        self.assertEqual(result.checks["sourceRows"], 2)
+        self.assertEqual(
+            [(activity.activity_type, activity.amount) for activity in result.activities],
+            [("CREDIT", Decimal("1.50")), ("WITHDRAWAL", Decimal("3.08"))],
+        )
+
     def test_revolut_savings_reconciles_interest_reinvestment_and_withdrawal(self):
         path = self.write(
             "savings.tsv",

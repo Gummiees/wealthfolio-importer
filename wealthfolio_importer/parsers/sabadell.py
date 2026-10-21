@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+from openpyxl import load_workbook
 import xlrd
 
 from ..model import Activity, ConversionResult
@@ -288,17 +289,13 @@ def _sabadell_card_activity(
     )
 
 
-def _parse_sabadell_card_xls(path: Path, config: dict) -> ConversionResult:
+def _parse_sabadell_card_excel(path: Path, config: dict, rows: list[list[object]]) -> ConversionResult:
     currency = config.get("currency", "EUR").upper()
     year = _card_year(path)
-    try:
-        sheet = xlrd.open_workbook(path).sheet_by_index(0)
-    except xlrd.XLRDError as error:
-        raise ValueError(f"No se pudo abrir el Excel de tarjeta Sabadell: {path.name}") from error
 
     header_row: int | None = None
-    for row_number in range(sheet.nrows):
-        values = [str(value).strip() for value in sheet.row_values(row_number)]
+    for row_number, row in enumerate(rows):
+        values = [str(value or "").strip() for value in row]
         if values[:4] == ["FECHA", "CONCEPTO", "LOCALIDAD", "IMPORTE"]:
             header_row = row_number
             break
@@ -309,8 +306,8 @@ def _parse_sabadell_card_xls(path: Path, config: dict) -> ConversionResult:
 
     activities: list[Activity] = []
     counts: dict[str, int] = {}
-    for row_number in range(header_row + 1, sheet.nrows):
-        values = [str(value).strip() for value in sheet.row_values(row_number)]
+    for row_number, row in enumerate(rows[header_row + 1 :], header_row + 1):
+        values = [str(value or "").strip() for value in row]
         if len(values) < 4 or not re.fullmatch(r"\d{2}/\d{2}", values[0]):
             continue
         amount_raw = next(
@@ -341,9 +338,35 @@ def _parse_sabadell_card_xls(path: Path, config: dict) -> ConversionResult:
     ).sorted()
 
 
+def _parse_sabadell_card_xls(path: Path, config: dict) -> ConversionResult:
+    try:
+        sheet = xlrd.open_workbook(path).sheet_by_index(0)
+    except xlrd.XLRDError as error:
+        raise ValueError(f"No se pudo abrir el Excel de tarjeta Sabadell: {path.name}") from error
+    return _parse_sabadell_card_excel(
+        path,
+        config,
+        [sheet.row_values(row_number) for row_number in range(sheet.nrows)],
+    )
+
+
+def _parse_sabadell_card_xlsx(path: Path, config: dict) -> ConversionResult:
+    try:
+        workbook = load_workbook(path, read_only=True, data_only=True)
+        try:
+            rows = [list(row) for row in workbook.active.iter_rows(values_only=True)]
+        finally:
+            workbook.close()
+    except Exception as error:
+        raise ValueError(f"No se pudo abrir el Excel de tarjeta Sabadell: {path.name}") from error
+    return _parse_sabadell_card_excel(path, config, rows)
+
+
 def parse_sabadell_card(path: Path, config: dict) -> ConversionResult:
     if path.suffix.lower() == ".xls":
         return _parse_sabadell_card_xls(path, config)
+    if path.suffix.lower() == ".xlsx":
+        return _parse_sabadell_card_xlsx(path, config)
 
     currency = config.get("currency", "EUR").upper()
     year = _card_year(path)

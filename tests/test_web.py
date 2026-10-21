@@ -24,6 +24,7 @@ class WebTests(unittest.TestCase):
                     "accounts": {
                         "xtb/main": {"parser": "xtb", "currency": "EUR"},
                         "sabadell/principal": {"parser": "sabadell", "currency": "EUR"},
+                        "sabadell/tarjeta": {"parser": "sabadell-card", "currency": "EUR"},
                     }
                 }
             ),
@@ -49,6 +50,7 @@ class WebTests(unittest.TestCase):
         self.assertIn("Sabadell", response.text)
         self.assertIn("Fonditel", response.text)
         self.assertIn('"accept": ".xlsx"', response.text)
+        self.assertIn('"accept": ".txt,.xls,.xlsx"', response.text)
 
     def test_upload_queues_only_a_valid_extension(self):
         response = self.client.post(
@@ -67,6 +69,15 @@ class WebTests(unittest.TestCase):
         )
         self.assertEqual(invalid.status_code, 400)
         self.assertFalse((self.inbox / "xtb" / "main" / "statement.tsv").exists())
+
+    def test_upload_queues_sabadell_card_xlsx(self):
+        response = self.client.post(
+            "/upload",
+            data={"account_key": "sabadell/tarjeta"},
+            files={"statement": ("card.xlsx", b"spreadsheet", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue((self.inbox / "sabadell" / "tarjeta" / "card.xlsx").is_file())
 
     def test_watcher_ignores_partial_web_uploads(self):
         temporary = self.inbox / "xtb" / "main" / "statement.xlsx.uploading"
