@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from decimal import Decimal
 from pathlib import Path
 
@@ -39,10 +40,20 @@ def parse_revolut_stocks(path: Path, config: dict) -> ConversionResult:
             "Cabecera de Revolut Stocks no reconocida. "
             f"Esperada: {EXPECTED_HEADER}; recibida: {header}"
         )
-    rows = [dict(zip(header, row)) for row in values]
+    source_rows = [dict(zip(header, row)) for row in values]
+    skipped_currencies: Counter[str] = Counter()
+    rows = []
+    for row in source_rows:
+        currency = row["Currency"].strip()
+        if currency != expected_currency:
+            skipped_currencies[currency or "VACÍA"] += 1
+            continue
+        rows.append(row)
 
     if not rows:
-        raise ValueError("El TSV de Revolut Stocks no contiene actividades")
+        raise ValueError(
+            f"El extracto de Revolut Stocks no contiene actividades en {expected_currency}"
+        )
 
     activities: list[Activity] = []
     counts: dict[str, int] = {}
@@ -135,5 +146,21 @@ def parse_revolut_stocks(path: Path, config: dict) -> ConversionResult:
 
     return ConversionResult(
         activities=activities,
-        checks={"sourceRows": len(rows), "activityCounts": counts},
+        checks={
+            "sourceRows": len(source_rows),
+            "completedRows": len(rows),
+            "skippedCurrencyRows": sum(skipped_currencies.values()),
+            "activityCounts": counts,
+        },
+        warnings=(
+            [
+                f"Filas de otras divisas omitidas para {expected_currency}: "
+                + ", ".join(
+                    f"{currency}={count}"
+                    for currency, count in sorted(skipped_currencies.items())
+                )
+            ]
+            if skipped_currencies
+            else []
+        ),
     ).sorted()

@@ -66,6 +66,21 @@ class ImporterTests(unittest.TestCase):
 
         self.assertEqual([(activity.activity_type, activity.amount) for activity in result.activities], [("DEPOSIT", Decimal("100"))])
 
+    def test_revolut_stocks_ignores_rows_in_other_currencies(self):
+        path = self.write(
+            "stocks.tsv",
+            "Date\tTicker\tType\tQuantity\tPrice per share\tTotal Amount\tCurrency\tFX Rate\n"
+            "2025-01-01T10:00:00Z\t\tCASH TOP-UP\t\t\tUSD 100\tUSD\t1.25\n"
+            "2025-01-01T10:00:01Z\t\tCASH TOP-UP\t\t\tEUR 50\tEUR\t1.00\n",
+        )
+
+        result = parse_revolut_stocks(path, {"currency": "USD"})
+
+        self.assertEqual(result.checks["sourceRows"], 2)
+        self.assertEqual(result.checks["skippedCurrencyRows"], 1)
+        self.assertEqual([activity.amount for activity in result.activities], [Decimal("100")])
+        self.assertIn("EUR=1", result.warnings[0])
+
     def test_revolut_current_reconciles_and_excludes_internal_transfers_from_spending(self):
         path = self.write(
             "account.tsv",
