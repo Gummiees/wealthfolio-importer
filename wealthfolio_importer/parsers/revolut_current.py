@@ -126,20 +126,20 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
 
     parsed: list[dict] = []
     skipped_statuses: dict[str, int] = {}
+    skipped_currencies: dict[str, int] = {}
     for line_number, row in enumerate(source_rows, 2):
         status = row["State"].upper()
         if status not in _COMPLETED:
             status_key = status or "VACÍO"
             skipped_statuses[status_key] = skipped_statuses.get(status_key, 0) + 1
             continue
+        currency = row["Divisa"].upper()
+        if currency != configured_currency:
+            skipped_currencies[currency] = skipped_currencies.get(currency, 0) + 1
+            continue
         amount = parse_decimal(row["Importe"], f"Línea {line_number}: importe")
         fee = parse_decimal(row["Comisión"], f"Línea {line_number}: comisión")
         balance = parse_decimal(row["Saldo"], f"Línea {line_number}: saldo")
-        currency = row["Divisa"].upper()
-        if currency != configured_currency:
-            raise ValueError(
-                f"Línea {line_number}: divisa {currency!r}; se esperaba {configured_currency!r}"
-            )
         if amount == 0 and fee == 0:
             raise ValueError(f"Línea {line_number}: importe y comisión no pueden ser ambos cero")
         if fee < 0:
@@ -266,12 +266,20 @@ def parse_revolut_current(path: Path, config: dict) -> ConversionResult:
                 f"{status}={count}" for status, count in sorted(skipped_statuses.items())
             )
         )
+    if skipped_currencies:
+        warnings.append(
+            f"Filas de otras divisas omitidas para {configured_currency}: "
+            + ", ".join(
+                f"{currency}={count}" for currency, count in sorted(skipped_currencies.items())
+            )
+        )
     return ConversionResult(
         activities=activities,
         checks={
             "sourceRows": len(source_rows),
             "completedRows": len(parsed),
             "skippedRows": sum(skipped_statuses.values()),
+            "skippedCurrencyRows": sum(skipped_currencies.values()),
             "openingBalance": str(opening),
             "statementBalance": str(parsed[-1]["balance"]),
             "reconstructedBalance": str(previous_balance),

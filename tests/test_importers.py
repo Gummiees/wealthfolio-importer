@@ -145,6 +145,24 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual([activity.activity_type for activity in result.activities], ["DEPOSIT", "WITHDRAWAL"])
         self.assertEqual(result.activities[-1].amount, Decimal("26999"))
 
+    def test_revolut_current_ignores_rows_from_other_currency_accounts(self):
+        path = self.write(
+            "mixed-current.tsv",
+            "Tipo\tProducto\tFecha de inicio\tFecha de finalización\tDescripción\t"
+            "Importe\tComisión\tDivisa\tState\tSaldo\n"
+            "Cambio\tActual\t2026-10-05 11:46:55\t2026-10-05 11:46:55\t"
+            "Conversión a HUF\t-700\t0\tEUR\tCOMPLETADO\t1645.24\n"
+            "Cambio\tActual\t2026-10-05 11:46:55\t2026-10-05 11:46:55\t"
+            "Conversión a HUF\t256443.52\t0\tHUF\tCOMPLETADO\t329114.35\n",
+        )
+
+        result = parse_revolut_current(path, {"currency": "EUR"})
+
+        self.assertEqual(result.checks["completedRows"], 1)
+        self.assertEqual(result.checks["skippedCurrencyRows"], 1)
+        self.assertEqual([activity.activity_type for activity in result.activities], ["DEPOSIT", "TRANSFER_OUT"])
+        self.assertIn("HUF=1", result.warnings[0])
+
     def test_sabadell_card_parses_date_search_xls(self):
         path = self.root / "13102026 4106________8015.xls"
         path.touch()
