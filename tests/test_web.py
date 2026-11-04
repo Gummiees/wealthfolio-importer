@@ -23,6 +23,7 @@ class WebTests(unittest.TestCase):
                 {
                     "accounts": {
                         "xtb/main": {"parser": "xtb", "currency": "EUR"},
+                        "revolut/stocks": {"parser": "revolut-stocks", "currency": "USD"},
                         "sabadell/principal": {"parser": "sabadell", "currency": "EUR"},
                         "sabadell/tarjeta": {"parser": "sabadell-card", "currency": "EUR"},
                     }
@@ -49,8 +50,9 @@ class WebTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Sabadell", response.text)
         self.assertIn("Fonditel", response.text)
-        self.assertIn('"accept": ".xlsx"', response.text)
-        self.assertIn('"accept": ".csv,.txt,.xlsx"', response.text)
+        self.assertIn('"accept": ".csv,.xls,.xlsx"', response.text)
+        self.assertIn('"accept": ".csv,.txt,.xls,.xlsx"', response.text)
+        self.assertIn('"accept": ".csv,.tsv,.xls,.xlsx"', response.text)
         self.assertIn('"accept": ".txt,.xls,.xlsx"', response.text)
 
     def test_upload_queues_only_a_valid_extension(self):
@@ -88,6 +90,19 @@ class WebTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue((self.inbox / "sabadell" / "principal" / "account.xlsx").is_file())
+
+    def test_upload_queues_xls_for_sabadell_revolut_and_xtb(self):
+        for account_key, filename in (
+            ("sabadell/principal", "account.xls"),
+            ("revolut/stocks", "stocks.xls"),
+            ("xtb/main", "xtb.xls"),
+        ):
+            response = self.client.post(
+                "/upload",
+                data={"account_key": account_key},
+                files={"statement": (filename, b"spreadsheet", "application/vnd.ms-excel")},
+            )
+            self.assertEqual(response.status_code, 200)
 
     def test_watcher_ignores_partial_web_uploads(self):
         temporary = self.inbox / "xtb" / "main" / "statement.xlsx.uploading"

@@ -52,6 +52,20 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual(result.activities[0].fx_rate, Decimal("0.8"))
         self.assertEqual(result.activities[-1].subtype, "REIMBURSEMENT")
 
+    def test_revolut_stocks_parses_xlsx_export(self):
+        path = self.root / "stocks.xlsx"
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append([
+            "Date", "Ticker", "Type", "Quantity", "Price per share", "Total Amount", "Currency", "FX Rate"
+        ])
+        sheet.append([datetime(2025, 1, 1, 10), "", "CASH TOP-UP", "", "", 100, "USD", 1.25])
+        workbook.save(path)
+
+        result = parse_revolut_stocks(path, {"currency": "USD"})
+
+        self.assertEqual([(activity.activity_type, activity.amount) for activity in result.activities], [("DEPOSIT", Decimal("100"))])
+
     def test_revolut_current_reconciles_and_excludes_internal_transfers_from_spending(self):
         path = self.write(
             "account.tsv",
@@ -287,6 +301,19 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual([a.activity_type for a in result.activities], ["DEPOSIT", "BUY", "INTEREST"])
         self.assertEqual(result.checks["endingCash"], "21")
         self.assertEqual(result.checks["ignoredSubaccountTransfers"], 2)
+
+    def test_xtb_parses_cash_operations_csv(self):
+        path = self.write(
+            "xtb.csv",
+            "Type,Instrument,Ticker,Category,Time,Amount,ID,Comment,Product,Position ID\n"
+            "Deposit,,,,2025-01-01T00:00:00Z,100,1,deposit,Investment Plans,\n"
+            "Total,,,,,100,,,,\n",
+        )
+
+        result = parse_xtb(path, {"currency": "EUR"})
+
+        self.assertEqual([(activity.activity_type, activity.amount) for activity in result.activities], [("DEPOSIT", Decimal("100"))])
+        self.assertEqual(result.checks["positionReconciliation"], "not available in CSV export")
 
     def test_xtb_trade_comment_allows_current_ticker_format(self):
         self.assertEqual(

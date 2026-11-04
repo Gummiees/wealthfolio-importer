@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -8,6 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from ..model import Activity, ConversionResult
+from ..tabular import read_table
 from ..utils import (
     iso_local,
     parse_european_decimal,
@@ -207,13 +207,12 @@ def parse_revolut_savings(path: Path, config: dict) -> ConversionResult:
     value_column = f"Value, {currency}"
     expected_base = ["Date", "Description", value_column]
 
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        if not reader.fieldnames or reader.fieldnames[:3] != expected_base:
-            raise ValueError(
-                f"Cabecera de Revolut Savings {currency} no reconocida: {reader.fieldnames}"
-            )
-        source_rows = list(reader)
+    header, values = read_table(path)
+    if header[:3] != expected_base:
+        raise ValueError(
+            f"Cabecera de Revolut Savings {currency} no reconocida: {header}"
+        )
+    source_rows = [dict(zip(header, row)) for row in values]
 
     rows: list[SavingsRow] = []
     for line_number, raw in enumerate(source_rows, 2):

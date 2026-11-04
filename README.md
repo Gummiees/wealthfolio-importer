@@ -9,12 +9,12 @@ La primera versión soporta:
 
 | Fuente | Entrada | Resultado |
 | --- | --- | --- |
-| Revolut cuenta corriente | `account-statement_*.tsv` | Saldo inicial, pagos, ingresos, comisiones, traspasos y cambios de divisa |
-| Revolut Stocks | `trading-account-statement_*.tsv` | Compras, ventas, dividendos, correcciones fiscales, depósitos y retiradas |
-| Revolut Flexible Cash Funds EUR | `savings-statement_*.tsv` | Aportaciones, compras, ventas, retiradas e interés diario neto |
-| Revolut Flexible Cash Funds USD | `savings-statement_*.tsv` | La misma conversión en USD |
-| XTB | Exportación completa `.xlsx` | Acciones/ETF, efectivo, intereses, impuestos y resultado neto de CFD |
-| Sabadell cuentas | Histórico de movimientos `.txt` o exportación `.xlsx` | Saldo inicial, ingresos, gastos, intereses y traspasos |
+| Revolut cuenta corriente | `account-statement_*` en `.tsv`, `.csv`, `.xls` o `.xlsx` | Saldo inicial, pagos, ingresos, comisiones, traspasos y cambios de divisa |
+| Revolut Stocks | `trading-account-statement_*` en `.tsv`, `.csv`, `.xls` o `.xlsx` | Compras, ventas, dividendos, correcciones fiscales, depósitos y retiradas |
+| Revolut Flexible Cash Funds EUR | `savings-statement_*` en `.tsv`, `.csv`, `.xls` o `.xlsx` | Aportaciones, compras, ventas, retiradas e interés diario neto |
+| Revolut Flexible Cash Funds USD | `savings-statement_*` en `.tsv`, `.csv`, `.xls` o `.xlsx` | La misma conversión en USD |
+| XTB | Exportación completa `.xls` o `.xlsx`; operaciones de efectivo `.csv` | Acciones/ETF, efectivo, intereses, impuestos y resultado neto de CFD |
+| Sabadell cuentas | Histórico de movimientos `.txt` o exportación `.xls`/`.xlsx` | Saldo inicial, ingresos, gastos, intereses y traspasos |
 | Sabadell tarjeta | Extracto de tarjeta `.txt` o búsqueda por fechas `.xls` | Compras y devoluciones |
 
 Fonditel está documentado como siguiente fuente, pero todavía no genera CSV.

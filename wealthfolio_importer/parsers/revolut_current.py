@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import csv
 import re
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 from ..model import Activity, ConversionResult
+from ..tabular import read_table
 from ..utils import parse_decimal, source_hash
 
 
@@ -54,28 +54,14 @@ def _normalized(value: str) -> str:
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
-    data = path.read_bytes()
-    text: str | None = None
-    for encoding in ("utf-8-sig", "cp1252"):
-        try:
-            text = data.decode(encoding)
-            break
-        except UnicodeDecodeError:
-            pass
-    if text is None:
-        raise ValueError(f"No se pudo decodificar el TSV de Revolut: {path.name}")
-
-    reader = csv.DictReader(text.splitlines(), delimiter="\t")
-    if reader.fieldnames is None:
-        raise ValueError("El TSV de Revolut no contiene cabecera")
-    reader.fieldnames = [_repair_mojibake(field).strip() for field in reader.fieldnames]
+    header, values = read_table(path)
+    header = [_repair_mojibake(field).strip() for field in header]
     rows = [
         {
-            _repair_mojibake(str(key)).strip(): _repair_mojibake(value or "").strip()
-            for key, value in row.items()
+            key: _repair_mojibake(value).strip()
+            for key, value in zip(header, row)
         }
-        for row in reader
-        if any((value or "").strip() for value in row.values())
+        for row in values
     ]
     required = {
         "Tipo",
@@ -89,7 +75,7 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
         "State",
         "Saldo",
     }
-    missing = sorted(required - set(reader.fieldnames))
+    missing = sorted(required - set(header))
     if missing:
         raise ValueError("Faltan columnas en el TSV de Revolut: " + ", ".join(missing))
     return rows

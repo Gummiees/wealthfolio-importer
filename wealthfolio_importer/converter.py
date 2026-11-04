@@ -24,12 +24,12 @@ PARSERS = {
 }
 
 EXTENSIONS = {
-    "revolut-stocks": {".tsv"},
-    "revolut-savings": {".tsv"},
-    "revolut-current": {".tsv"},
-    "sabadell": {".txt", ".csv", ".xlsx"},
+    "revolut-stocks": {".tsv", ".csv", ".xls", ".xlsx"},
+    "revolut-savings": {".tsv", ".csv", ".xls", ".xlsx"},
+    "revolut-current": {".tsv", ".csv", ".xls", ".xlsx"},
+    "sabadell": {".txt", ".csv", ".xls", ".xlsx"},
     "sabadell-card": {".txt", ".xls", ".xlsx"},
-    "xtb": {".xlsx"},
+    "xtb": {".csv", ".xls", ".xlsx"},
 }
 
 ACTIVITY_TYPES = {

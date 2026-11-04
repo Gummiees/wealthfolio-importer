@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import csv
-import io
 import re
 from decimal import Decimal
 from pathlib import Path
 
 from ..model import Activity, ConversionResult
+from ..tabular import read_table
 from ..utils import parse_decimal, source_hash
 
 
@@ -24,21 +23,23 @@ EXPECTED_HEADER = [
 
 def _money(value: str, currency: str, field: str) -> Decimal:
     match = re.fullmatch(r"([A-Z]{3})\s+(-?[0-9]+(?:\.[0-9]+)?)", value.strip())
+    if match and match.group(1) == currency:
+        return parse_decimal(match.group(2), field)
+    if re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value.strip()):
+        return parse_decimal(value, field)
     if not match or match.group(1) != currency:
         raise ValueError(f"{field} no reconocido para {currency}: {value!r}")
-    return parse_decimal(match.group(2), field)
 
 
 def parse_revolut_stocks(path: Path, config: dict) -> ConversionResult:
     expected_currency = config.get("currency", "USD")
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        if reader.fieldnames != EXPECTED_HEADER:
-            raise ValueError(
-                "Cabecera de Revolut Stocks no reconocida. "
-                f"Esperada: {EXPECTED_HEADER}; recibida: {reader.fieldnames}"
-            )
-        rows = list(reader)
+    header, values = read_table(path)
+    if header != EXPECTED_HEADER:
+        raise ValueError(
+            "Cabecera de Revolut Stocks no reconocida. "
+            f"Esperada: {EXPECTED_HEADER}; recibida: {header}"
+        )
+    rows = [dict(zip(header, row)) for row in values]
 
     if not rows:
         raise ValueError("El TSV de Revolut Stocks no contiene actividades")

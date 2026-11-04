@@ -7,9 +7,11 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+import xlrd
 from openpyxl import load_workbook
 
 from ..model import Activity, ConversionResult
+from ..tabular import read_table
 from ..utils import iso_utc, parse_decimal, source_hash
 
 
@@ -36,20 +38,72 @@ def _decimal(value: object, field: str) -> Decimal:
     return parse_decimal(value, field)
 
 
-def _load(path: Path):
+def _time(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    raise ValueError(f"Fecha XTB inválida: {value!r}")
+
+
+def _xlsx_sheets(path: Path) -> dict[str, list[list[object]]]:
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Workbook contains no default style")
-        return load_workbook(path, read_only=False, data_only=True)
+        workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        return {
+            sheet.title: [list(row) for row in sheet.iter_rows(values_only=True)]
+            for sheet in workbook.worksheets
+        }
+    finally:
+        workbook.close()
 
 
-def _sheet_rows(sheet, header_row: int) -> tuple[list[str], list[dict[str, object]]]:
-    header = [cell.value for cell in sheet[header_row]]
-    while header and header[-1] is None:
+def _xls_sheets(path: Path) -> dict[str, list[list[object]]]:
+    try:
+        workbook = xlrd.open_workbook(path)
+    except xlrd.XLRDError as error:
+        raise ValueError(f"No se pudo abrir el Excel XTB: {path.name}") from error
+    sheets: dict[str, list[list[object]]] = {}
+    for sheet in workbook.sheets():
+        rows: list[list[object]] = []
+        for row_number in range(sheet.nrows):
+            row: list[object] = []
+            for cell in sheet.row(row_number):
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    row.append(xlrd.xldate_as_datetime(cell.value, workbook.datemode))
+                else:
+                    row.append(cell.value)
+            rows.append(row)
+        sheets[sheet.name] = rows
+    return sheets
+
+
+def _load(path: Path) -> tuple[dict[str, list[list[object]]], bool]:
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        return _xlsx_sheets(path), True
+    if suffix == ".xls":
+        return _xls_sheets(path), True
+    if suffix == ".csv":
+        header, rows = read_table(path)
+        return {"Cash Operations": [header, *rows]}, False
+    raise ValueError(f"Formato XTB no soportado: {path.suffix}")
+
+
+def _sheet_rows(sheet: list[list[object]], header_row: int) -> tuple[list[str], list[dict[str, object]]]:
+    header = list(sheet[header_row - 1])
+    while header and header[-1] in (None, ""):
         header.pop()
     rows: list[dict[str, object]] = []
-    for values in sheet.iter_rows(min_row=header_row + 1, max_col=len(header), values_only=True):
+    for values in sheet[header_row:]:
+        values = values[:len(header)]
         if not any(value is not None for value in values):
             continue
+        values += [None] * (len(header) - len(values))
         rows.append(dict(zip(header, values)))
     return header, rows
 
@@ -71,21 +125,21 @@ def _closed_conversion_rates(workbook) -> dict[str, tuple[Decimal, Decimal]]:
     return result
 
 
-def _open_position_totals(workbook) -> dict[str, Decimal]:
+def _open_position_totals(workbook: dict[str, list[list[object]]]) -> dict[str, Decimal]:
     sheet = workbook["Open Positions"]
     header_row = None
-    for row_number in range(1, min(sheet.max_row, 30) + 1):
-        values = [cell.value for cell in sheet[row_number]]
+    for row_number, values in enumerate(sheet[:30], 1):
         if values[:2] == ["Product", "Instrument/Position"]:
             header_row = row_number
             break
     if header_row is None:
         raise ValueError("No se encontró la tabla de posiciones en Open Positions")
-    header = [cell.value for cell in sheet[header_row]]
-    while header and header[-1] is None:
+    header = list(sheet[header_row - 1])
+    while header and header[-1] in (None, ""):
         header.pop()
     result: dict[str, Decimal] = {}
-    for values in sheet.iter_rows(min_row=header_row + 1, max_col=len(header), values_only=True):
+    for values in sheet[header_row:]:
+        values = values[:len(header)] + [None] * max(0, len(header) - len(values))
         row = dict(zip(header, values))
         if row.get("Product") != "Investment Plan":
             continue
@@ -102,14 +156,14 @@ def parse_xtb(path: Path, config: dict) -> ConversionResult:
     account_currency = config.get("currency", "EUR")
     aliases = config.get("tickerAliases", {})
     currencies = config.get("tickerCurrencies", {})
-    workbook = _load(path)
+    workbook, complete_report = _load(path)
     required_sheets = {"Closed Positions", "Cash Operations", "Open Positions"}
-    if set(workbook.sheetnames) != required_sheets:
+    if complete_report and set(workbook) != required_sheets:
         raise ValueError(
-            f"Hojas XTB no reconocidas: {workbook.sheetnames}; esperadas: {sorted(required_sheets)}"
+            f"Hojas XTB no reconocidas: {sorted(workbook)}; esperadas: {sorted(required_sheets)}"
         )
 
-    header, rows = _sheet_rows(workbook["Cash Operations"], 5)
+    header, rows = _sheet_rows(workbook["Cash Operations"], 5 if complete_report else 1)
     if header != CASH_HEADER:
         raise ValueError(f"Cabecera Cash Operations no reconocida: {header}")
     total_rows = [row for row in rows if row["Type"] == "Total"]
@@ -126,7 +180,7 @@ def parse_xtb(path: Path, config: dict) -> ConversionResult:
             f"El efectivo XTB no concilia: filas={calculated_cash}, total={expected_cash}"
         )
 
-    rates = _closed_conversion_rates(workbook)
+    rates = _closed_conversion_rates(workbook) if complete_report else {}
     activities: list[Activity] = []
     trade_quantities: dict[str, Decimal] = defaultdict(Decimal)
     cfd_rows: dict[str, list[dict[str, object]]] = defaultdict(list)
@@ -156,9 +210,7 @@ def parse_xtb(path: Path, config: dict) -> ConversionResult:
         if kind == "Subaccount transfer":
             continue
 
-        time = row["Time"]
-        if not isinstance(time, datetime):
-            raise ValueError(f"Fecha XTB inválida: {time!r}")
+        time = _time(row["Time"])
         amount_signed = _decimal(row["Amount"], "Amount")
         cash_id = str(row["ID"])
         ref = f"xtb-cash:{cash_id}"
@@ -240,7 +292,7 @@ def parse_xtb(path: Path, config: dict) -> ConversionResult:
         ref = source_hash("xtb-cfd", position_id, *ids)
         activities.append(
             Activity(
-                date=iso_utc(close["Time"]),
+                date=iso_utc(_time(close["Time"])),
                 activity_type="CREDIT" if net >= 0 else "FEE",
                 currency=account_currency,
                 amount=abs(net),
@@ -252,17 +304,18 @@ def parse_xtb(path: Path, config: dict) -> ConversionResult:
             )
         )
 
-    expected_positions = _open_position_totals(workbook)
-    all_tickers = set(trade_quantities) | set(expected_positions)
-    position_differences: dict[str, str] = {}
-    for ticker in sorted(all_tickers):
-        actual = trade_quantities.get(ticker, Decimal("0"))
-        expected = expected_positions.get(ticker, Decimal("0"))
-        difference = actual - expected
-        if abs(difference) > Decimal("0.0001"):
-            position_differences[ticker] = str(difference)
-    if position_differences:
-        raise ValueError(f"Las posiciones XTB no concilian: {position_differences}")
+    expected_positions = _open_position_totals(workbook) if complete_report else {}
+    if complete_report:
+        all_tickers = set(trade_quantities) | set(expected_positions)
+        position_differences: dict[str, str] = {}
+        for ticker in sorted(all_tickers):
+            actual = trade_quantities.get(ticker, Decimal("0"))
+            expected = expected_positions.get(ticker, Decimal("0"))
+            difference = actual - expected
+            if abs(difference) > Decimal("0.0001"):
+                position_differences[ticker] = str(difference)
+        if position_differences:
+            raise ValueError(f"Las posiciones XTB no concilian: {position_differences}")
 
     counts: dict[str, int] = defaultdict(int)
     for activity in activities:
@@ -277,5 +330,6 @@ def parse_xtb(path: Path, config: dict) -> ConversionResult:
             "activityCounts": dict(counts),
             "endingCash": str(expected_cash),
             "openPositions": {key: str(value) for key, value in expected_positions.items()},
+            "positionReconciliation": "complete" if complete_report else "not available in CSV export",
         },
     ).sorted()

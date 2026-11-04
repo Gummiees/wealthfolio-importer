@@ -99,15 +99,31 @@ def _header_index(headers: list[str], aliases: set[str]) -> int | None:
     return next((index for index, header in enumerate(headers) if header in aliases), None)
 
 
-def _sabadell_xlsx_lines(path: Path) -> list[str]:
-    try:
-        workbook = load_workbook(path, read_only=True, data_only=True)
+def _sabadell_excel_lines(path: Path) -> list[str]:
+    if path.suffix.lower() == ".xlsx":
         try:
-            rows = [list(row) for row in workbook.active.iter_rows(values_only=True)]
-        finally:
-            workbook.close()
-    except Exception as error:
-        raise ValueError(f"No se pudo abrir el Excel de Sabadell: {path.name}") from error
+            workbook = load_workbook(path, read_only=True, data_only=True)
+            try:
+                rows = [list(row) for row in workbook.active.iter_rows(values_only=True)]
+            finally:
+                workbook.close()
+        except Exception as error:
+            raise ValueError(f"No se pudo abrir el Excel de Sabadell: {path.name}") from error
+    else:
+        try:
+            workbook = xlrd.open_workbook(path)
+            sheet = workbook.sheet_by_index(0)
+            rows = [
+                [
+                    xlrd.xldate_as_datetime(cell.value, workbook.datemode)
+                    if cell.ctype == xlrd.XL_CELL_DATE
+                    else cell.value
+                    for cell in sheet.row(row_number)
+                ]
+                for row_number in range(sheet.nrows)
+            ]
+        except xlrd.XLRDError as error:
+            raise ValueError(f"No se pudo abrir el Excel de Sabadell: {path.name}") from error
 
     for header_row, row in enumerate(rows):
         headers = [_normalise_excel_header(value) for value in row]
@@ -159,8 +175,8 @@ def _sabadell_xlsx_lines(path: Path) -> list[str]:
 
 def parse_sabadell(path: Path, config: dict) -> ConversionResult:
     currency = config.get("currency", "EUR").upper()
-    if path.suffix.lower() == ".xlsx":
-        lines = _sabadell_xlsx_lines(path)
+    if path.suffix.lower() in {".xls", ".xlsx"}:
+        lines = _sabadell_excel_lines(path)
     else:
         lines = [line.strip() for line in _read_text(path).splitlines() if line.strip()]
     if not lines:
