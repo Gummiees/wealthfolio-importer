@@ -4,10 +4,12 @@ import tempfile
 import unittest
 import json
 import os
+import re
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from openpyxl import Workbook
 
@@ -334,6 +336,43 @@ class ImporterTests(unittest.TestCase):
         self.assertEqual([a.activity_type for a in result.activities], ["DEPOSIT", "BUY", "INTEREST"])
         self.assertEqual(result.checks["endingCash"], "21")
         self.assertEqual(result.checks["ignoredSubaccountTransfers"], 2)
+
+    def test_xtb_ignores_incorrect_xlsx_used_range_metadata(self):
+        path = self.root / "xtb-bad-dimension.xlsx"
+        workbook = Workbook()
+        closed = workbook.active
+        closed.title = "Closed Positions"
+        for _ in range(4):
+            closed.append([])
+        closed.append(["Position ID", "Open Conversion Rate", "Close Conversion Rate"])
+
+        cash = workbook.create_sheet("Cash Operations")
+        for _ in range(4):
+            cash.append([])
+        cash.append([
+            "Type", "Instrument", "Ticker", "Category", "Time", "Amount", "ID", "Comment", "Product", "Position ID"
+        ])
+        cash.append(["Deposit", "", "", "", datetime(2025, 1, 1), 100, "1", "deposit", "Investment Plans", ""])
+        cash.append(["Total", None, None, None, None, 100, None, None, None, None])
+
+        opened = workbook.create_sheet("Open Positions")
+        opened.append(["Product", "Instrument/Position", "Ticker", "Category", "Type", "Volume"])
+        workbook.save(path)
+
+        with ZipFile(path) as source:
+            contents = {item.filename: source.read(item.filename) for item in source.infolist()}
+        with ZipFile(path, "w", ZIP_DEFLATED) as target:
+            for name, content in contents.items():
+                if name.startswith("xl/worksheets/"):
+                    content = re.sub(rb'<dimension ref="[^"]*"/>', b'<dimension ref="A1"/>', content)
+                target.writestr(name, content)
+
+        result = parse_xtb(path, {"currency": "EUR"})
+
+        self.assertEqual(
+            [(activity.activity_type, activity.amount) for activity in result.activities],
+            [("DEPOSIT", Decimal("100"))],
+        )
 
     def test_xtb_parses_cash_operations_csv(self):
         path = self.write(

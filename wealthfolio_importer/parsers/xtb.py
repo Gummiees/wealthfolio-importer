@@ -54,10 +54,14 @@ def _xlsx_sheets(path: Path) -> dict[str, list[list[object]]]:
         warnings.filterwarnings("ignore", message="Workbook contains no default style")
         workbook = load_workbook(path, read_only=True, data_only=True)
     try:
-        return {
-            sheet.title: [list(row) for row in sheet.iter_rows(values_only=True)]
-            for sheet in workbook.worksheets
-        }
+        sheets: dict[str, list[list[object]]] = {}
+        for sheet in workbook.worksheets:
+            # Some XTB exports incorrectly persist ``<dimension ref="A1"/>``
+            # despite containing a full table. In read-only mode openpyxl
+            # trusts that metadata and would otherwise return only cell A1.
+            sheet.reset_dimensions()
+            sheets[sheet.title] = [list(row) for row in sheet.iter_rows(values_only=True)]
+        return sheets
     finally:
         workbook.close()
 
